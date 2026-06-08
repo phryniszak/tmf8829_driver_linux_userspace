@@ -29,7 +29,7 @@
 #endif
 
 /* GPIO pin number used to drive the chip's enable line, set via the
- * GPIO_ENABLE_PIN CMake cache variable (defaults to 40). */
+ * GPIO_ENABLE_PIN CMake cache variable (defaults to 16). */
 #ifndef GPIO_ENABLE_PIN
 #define GPIO_ENABLE_PIN 16
 #endif
@@ -269,6 +269,7 @@ int main (int argc, char * argv[])
 
 	tof_chip->gpiod_enable = GPIO_ENABLE_PIN;
     enablePinLow(tof_chip);
+    delayInMicroseconds(10 * 1000);   /* hold EN LOW ≥10 ms so the device fully resets */
     if (enablePinHigh(tof_chip) == -1)
         return 0;
 

@@ -255,17 +255,12 @@ int tmf8829_probe(tmf8829_chip *chip)
     }
 #endif
 
-    delayInMicroseconds(ENABLE_TIME_MS * 1000);
-
-    tmf8829PowerUp(driver);
-
-    delayInMicroseconds(3 * 1000);
-
-    if (tmf8829IsCpuReady(driver, CPU_READY_TIME_MS * 2) == 0)
-    {
-        PRINT_INFO("CPU is not ready.\n");
-        return -1;
-    }
+    /* The chip auto-boots into its bootloader when EN goes high; the
+     * PON/cpu_ready handshake (tmf8829PowerUp + tmf8829IsCpuReady) is not
+     * needed and the cpu_ready bit in the ENABLE register never sets on this
+     * hardware revision.  A 20 ms settle delay is sufficient (mirrors the
+     * approach used in tmf8829_rpi3_spi_app/src/main.c). */
+    delayInMicroseconds( 20 * 1000 );
 
     /* Switch off unused communication interface */
     if (chip->bustype == BUS_SPI)

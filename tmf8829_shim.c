@@ -86,7 +86,7 @@ out:
 // spi implemented function
 
 #define SPI_CHANNEL                0
-#define SPI_MAX_SPEED              20000000
+#define SPI_MAX_SPEED              1000000
 #define SPI_WR_CMD                 0x02
 #define SPI_RD_CMD                 0x03
 
@@ -424,10 +424,15 @@ int8_t rxReg(void *dptr, uint8_t slaveAddr, uint8_t regAddr, uint16_t toRx, uint
     return spi_read(regAddr, rxData, toRx);
 }
 
-int enablePinHigh(void *dptr)
+static int gpio_drive_enable( void *dptr, enum gpiod_line_value value )
 {
     tmf8829_chip *driver = (tmf8829_chip *)dptr;
     unsigned int offset = (unsigned int)driver->gpiod_enable;
+    /* After memset(tof_chip,0) gpiod_enable is 0; fall back to the saved offset */
+    if ( offset == 0 )
+        offset = g_gpio_enable_offset;
+    if ( offset == 0 )
+        return ( value == GPIOD_LINE_VALUE_INACTIVE ) ? 0 : -1;
 
     if ( !g_gpio_chip )
     {
@@ -447,32 +452,21 @@ int enablePinHigh(void *dptr)
             g_gpio_enable_req = NULL;
         }
         g_gpio_enable_offset = offset;
-        g_gpio_enable_req = gpio_request_output( g_gpio_chip, offset,
-                                                 GPIOD_LINE_VALUE_ACTIVE,
-                                                 "tmf8829-en" );
+        g_gpio_enable_req = gpio_request_output( g_gpio_chip, offset, value, "tmf8829-en" );
         if ( !g_gpio_enable_req )
             return -1;
         return 0;
     }
 
-    return gpiod_line_request_set_value( g_gpio_enable_req, offset, GPIOD_LINE_VALUE_ACTIVE );
+    return gpiod_line_request_set_value( g_gpio_enable_req, offset, value );
+}
+
+int enablePinHigh(void *dptr)
+{
+    return gpio_drive_enable( dptr, GPIOD_LINE_VALUE_ACTIVE );
 }
 
 int enablePinLow(void *dptr)
 {
-    (void)dptr;
-
-    if ( g_gpio_enable_req )
-    {
-        gpiod_line_request_set_value( g_gpio_enable_req, g_gpio_enable_offset, GPIOD_LINE_VALUE_INACTIVE );
-        gpiod_line_request_release( g_gpio_enable_req );
-        g_gpio_enable_req = NULL;
-    }
-    if ( g_gpio_chip )
-    {
-        gpiod_chip_close( g_gpio_chip );
-        g_gpio_chip = NULL;
-    }
-
-    return 0;
+    return gpio_drive_enable( dptr, GPIOD_LINE_VALUE_INACTIVE );
 }
