@@ -15,7 +15,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 
 - Linux-based operating system (tested on Raspberry Pi)
 - GCC compiler with C99 support
-- Linux GPIO sysfs or libgpiod for GPIO control
+- libgpiod v2 (`libgpiod-dev`) for GPIO control
 - zlib library for JSON compression
 - Root/sudo access for hardware I/O operations
 
@@ -174,7 +174,7 @@ Update `CMakeLists.txt` for your platform:
 set(CMAKE_C_COMPILER your_platform_gcc)
 
 # Update libraries
-set(LINK_LIBS m your_gpio_library pthread)
+set(LINK_LIBS m gpiod pthread)
 ```
 
 #### Step 5: Testing
@@ -840,6 +840,7 @@ Install required libraries (Raspberry Pi example):
 sudo apt-get update
 sudo apt-get install build-essential
 sudo apt-get install zlib1g-dev
+sudo apt-get install libgpiod-dev
 ```
 
 ### EVM Configuration

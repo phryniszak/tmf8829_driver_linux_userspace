@@ -12,6 +12,7 @@
  * Defines, macro and functions to match the target platform.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -22,6 +23,7 @@
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <time.h>
+#include <gpiod.h>
 
 #include "tmf8829_driver.h"
 #include "tmf8829_shim.h"
@@ -33,107 +35,51 @@
 int g_debug_enabled = 0;
 
 /////////////////////////////////////////////////
+// GPIO via libgpiod v2
 
-static char *sysfs_export = "/sys/class/gpio/export";
-static char *sysfs_unexport = "/sys/class/gpio/unexport";
-static char *sysfs_gpio = "/sys/class/gpio/gpio";
+#define GPIO_CHIP_PATH "/dev/gpiochip0"
 
-enum gpio_direction {
-    IN_DIR,
-    OUT_DIR,
-    INVAL_DIR,
-};
+static struct gpiod_chip *g_gpio_chip = NULL;
+static struct gpiod_line_request *g_gpio_enable_req = NULL;
+static unsigned int g_gpio_enable_offset = 0;
 
-enum gpio_value {
-    OFF = 0,
-    ON  = 1,
-};
-
-bool gpio_is_init(uint32_t gpio)
+static struct gpiod_line_request *
+gpio_request_output( struct gpiod_chip *chip, unsigned int offset,
+                     enum gpiod_line_value init_value, const char *consumer )
 {
-    int32_t error = 0;
-    char cmd[255] = {0};
+    struct gpiod_line_request *req = NULL;
+    struct gpiod_line_settings *settings = gpiod_line_settings_new();
+    struct gpiod_line_config *line_cfg = gpiod_line_config_new();
+    struct gpiod_request_config *req_cfg = gpiod_request_config_new();
 
-    if (gpio == 0)
-        return false;
-
-    (void) snprintf(cmd, sizeof(cmd), "ls %s%u/value > /dev/null 2>&1", sysfs_gpio, gpio);
-
-    error = system(cmd);
-    return error ? false : true;
-}
-
-int32_t init_gpio(uint32_t gpio, uint32_t direction)
-{
-    int32_t error = 0;
-    char cmd[255] = {0};
-
-    if (gpio == 0 || direction >= INVAL_DIR)
-        return -1;
-
-    if (!gpio_is_init(gpio)) {
-        (void) snprintf(cmd, sizeof(cmd), "echo %u > %s", gpio, sysfs_export);
-
-        error = system(cmd);
-        if (error)
-            return error;
+    if ( !settings || !line_cfg || !req_cfg )
+    {
+        fprintf( stderr, "gpiod: failed to allocate config objects\n" );
+        goto out;
     }
 
-    (void) snprintf(cmd, sizeof(cmd), "echo %s > %s%u/direction", direction ? "out" : "in", sysfs_gpio, gpio);
+    gpiod_line_settings_set_direction( settings, GPIOD_LINE_DIRECTION_OUTPUT );
+    gpiod_line_settings_set_output_value( settings, init_value );
 
-    error = system(cmd);
+    if ( gpiod_line_config_add_line_settings( line_cfg, &offset, 1, settings ) < 0 )
+    {
+        fprintf( stderr, "gpiod_line_config_add_line_settings(offset=%u): %s\n", offset, strerror( errno ) );
+        goto out;
+    }
 
-    return error;
+    gpiod_request_config_set_consumer( req_cfg, consumer );
+
+    req = gpiod_chip_request_lines( chip, req_cfg, line_cfg );
+    if ( !req )
+        fprintf( stderr, "gpiod_chip_request_lines(offset=%u): %s\n", offset, strerror( errno ) );
+
+out:
+    gpiod_request_config_free( req_cfg );
+    gpiod_line_config_free( line_cfg );
+    gpiod_line_settings_free( settings );
+    return req;
 }
 
-int32_t deinit_gpio(uint32_t gpio)
-{
-    int32_t error = 0;
-    char cmd[255] = {0};
-
-    if (gpio == 0 || !gpio_is_init(gpio))
-        return -1;
-
-    (void) snprintf(cmd, sizeof(cmd), "echo %u > %s", gpio, sysfs_unexport);
-
-    error = system(cmd);
-    return error;
-}
-
-int32_t read_gpio(uint32_t gpio, uint32_t *value)
-{
-    int32_t error = 0;
-    char cmd[255] = {0};
-    FILE *fp;
-
-    if (!gpio_is_init(gpio) || value == NULL)
-        return -1;
-
-    (void) snprintf(cmd, sizeof(cmd), "cat %s%u/value", sysfs_gpio, gpio);
-
-    fp = popen(cmd, "r");
-    if (fp == NULL)
-        return -1;
-
-    error = fscanf(fp, "%u", value);
-    (void)pclose(fp);
-
-    return error;
-}
-
-int32_t write_gpio(uint32_t gpio, uint32_t value)
-{
-    int32_t error = 0;
-    char cmd[255] = {0};
-
-    if (!gpio_is_init(gpio))
-        return -1;
-
-    (void) snprintf(cmd, sizeof(cmd), "echo %u > %s%u/value", value, sysfs_gpio, gpio);
-
-    error = system(cmd);
-    return error;
-}
 /////////////////////////////////////////////////
 
 /////////////////////////////////////////////////
@@ -441,11 +387,6 @@ int read_i2c_block(uint32_t slave_addr, uint8_t reg, uint8_t *buf, uint32_t len)
 }
 ////////////////////////////////////////////////////////////////
 
-static int writePin(uint8_t gpio, uint8_t value)
-{
-    return write_gpio(gpio, value);
-}
-
 void delayInMicroseconds(uint32_t wait)
 {
     usleep(wait);
@@ -486,20 +427,52 @@ int8_t rxReg(void *dptr, uint8_t slaveAddr, uint8_t regAddr, uint16_t toRx, uint
 int enablePinHigh(void *dptr)
 {
     tmf8829_chip *driver = (tmf8829_chip *)dptr;
+    unsigned int offset = (unsigned int)driver->gpiod_enable;
 
-	if (init_gpio(driver->gpiod_enable,  OUT_DIR)) {
-        PRINT_INFO("Error initializing CE pin\n");
-        return -1;
+    if ( !g_gpio_chip )
+    {
+        g_gpio_chip = gpiod_chip_open( GPIO_CHIP_PATH );
+        if ( !g_gpio_chip )
+        {
+            fprintf( stderr, "gpiod_chip_open(%s): %s\n", GPIO_CHIP_PATH, strerror( errno ) );
+            return -1;
+        }
     }
-    return writePin(driver->gpiod_enable, 1);
+
+    if ( !g_gpio_enable_req || g_gpio_enable_offset != offset )
+    {
+        if ( g_gpio_enable_req )
+        {
+            gpiod_line_request_release( g_gpio_enable_req );
+            g_gpio_enable_req = NULL;
+        }
+        g_gpio_enable_offset = offset;
+        g_gpio_enable_req = gpio_request_output( g_gpio_chip, offset,
+                                                 GPIOD_LINE_VALUE_ACTIVE,
+                                                 "tmf8829-en" );
+        if ( !g_gpio_enable_req )
+            return -1;
+        return 0;
+    }
+
+    return gpiod_line_request_set_value( g_gpio_enable_req, offset, GPIOD_LINE_VALUE_ACTIVE );
 }
 
 int enablePinLow(void *dptr)
 {
-    tmf8829_chip *driver = (tmf8829_chip *)dptr;
+    (void)dptr;
 
-	writePin(driver->gpiod_enable, 0);
-	deinit_gpio(driver->gpiod_enable);
+    if ( g_gpio_enable_req )
+    {
+        gpiod_line_request_set_value( g_gpio_enable_req, g_gpio_enable_offset, GPIOD_LINE_VALUE_INACTIVE );
+        gpiod_line_request_release( g_gpio_enable_req );
+        g_gpio_enable_req = NULL;
+    }
+    if ( g_gpio_chip )
+    {
+        gpiod_chip_close( g_gpio_chip );
+        g_gpio_chip = NULL;
+    }
 
-    return 1;
+    return 0;
 }

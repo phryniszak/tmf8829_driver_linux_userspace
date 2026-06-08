@@ -35,7 +35,7 @@ set(SOURCES
     tmf8829_shim.c
 )
 
-set(LINK_LIBS m pthread)
+set(LINK_LIBS m pthread gpiod)
 
 if(ENABLE_JSON_LOGGING)
     list(APPEND SOURCES tmf8829_json.c)
