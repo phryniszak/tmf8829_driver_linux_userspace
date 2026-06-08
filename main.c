@@ -31,7 +31,7 @@
 /* GPIO pin number used to drive the chip's enable line, set via the
  * GPIO_ENABLE_PIN CMake cache variable (defaults to 40). */
 #ifndef GPIO_ENABLE_PIN
-#define GPIO_ENABLE_PIN 40
+#define GPIO_ENABLE_PIN 16
 #endif
 
 static tmf8829_chip g_tof_chip;

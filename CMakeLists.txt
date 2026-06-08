@@ -18,7 +18,7 @@ option(ENABLE_HISTOGRAM "Enable histogram parsing and storage (saves ~600KB RAM 
 option(ENABLE_KEYSTONE "Enable keystone angle calculation" ON)
 
 # GPIO pin number used to drive the chip's enable line
-set(GPIO_ENABLE_PIN 40 CACHE STRING "GPIO pin number used to enable the TMF8829 chip")
+set(GPIO_ENABLE_PIN 16 CACHE STRING "GPIO pin number used to enable the TMF8829 chip")
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

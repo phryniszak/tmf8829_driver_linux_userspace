@@ -871,7 +871,7 @@ The CMake build supports the following optional features and settings as cache v
 | JSON Logging | `ENABLE_JSON_LOGGING` | Enable compressed JSON file output (default: ON) |
 | Histogram | `ENABLE_HISTOGRAM` | Enable histogram data capture (default: ON, ~600KB RAM) |
 | Keystone | `ENABLE_KEYSTONE` | Enable angle calculation from 3D data (default: ON) |
-| Enable GPIO Pin | `GPIO_ENABLE_PIN` | GPIO pin number used to drive the chip's enable line (default: 40) |
+| Enable GPIO Pin | `GPIO_ENABLE_PIN` | GPIO pin number used to drive the chip's enable line (default: 16) |
 
 To disable a feature or change a setting, pass `-D<VARIABLE>=<VALUE>` when configuring, e.g.:
 
