@@ -74,7 +74,7 @@ The project is organized into several modules, each with specific responsibiliti
 
 | File | Description |
 |------|-------------|
-| `Makefile` | Build configuration with optional features |
+| `CMakeLists.txt` | Build configuration with optional features |
 
 ### Directory Structure
 
@@ -94,7 +94,7 @@ ams_tmf8829_mcu/
 ├── tmf8829_json.h              # JSON logging header
 ├── tmf8829_keystone.c          # Keystone angle calculation implementation
 ├── tmf8829_keystone.h          # Keystone structures and API
-├── Makefile                    # Build configuration
+├── CMakeLists.txt              # Build configuration
 └── README.md                   # Main documentation
 ```
 
@@ -167,14 +167,14 @@ void tmf8829FrameParserInit(tmf8829FrameParser_t *parser)
 
 #### Step 4: Build System
 
-Update `Makefile` for your platform:
+Update `CMakeLists.txt` for your platform:
 
-```makefile
-# Update compiler
-CC = your_platform_gcc
+```cmake
+# Update toolchain (e.g. via a CMake toolchain file or -DCMAKE_C_COMPILER=...)
+set(CMAKE_C_COMPILER your_platform_gcc)
 
 # Update libraries
-LDFLAGS = -lm -lyour_gpio_library -lpthread
+set(LINK_LIBS m your_gpio_library pthread)
 ```
 
 #### Step 5: Testing
@@ -312,7 +312,7 @@ Total (Dual):              4,652,480 bytes ≈ 4.54 MB
 
 ### Memory Optimization Tips
 
-1. **Disable Histogram**: Comment out `ENABLE_HISTOGRAM` in Makefile to save ~600KB
+1. **Disable Histogram**: Configure with `-DENABLE_HISTOGRAM=OFF` to save ~600KB
 2. **Reduce JSON Queue**: Reduce `JSON_QUEUE_SIZE` in `tmf8829_json.h` to save memory
 3. **Lower Resolution**: Use 8x8 or 16x16 modes to reduce memory requirements
 4. **Disable Dual Mode**: Avoid dual mode to reduce histogram memory by 50%
@@ -623,13 +623,13 @@ This section provides detailed descriptions of all command-line options.
 | `-s <n>`    | `--shortiterations <n>` | Number of short iterations                                             		| 100     |
 | `-r <n>`    | `--threshold <n>`   	| Confidence threshold                                                   		| 6       |
 | `-p <ms>`   | `--period <ms>`      	| Period value in milliseconds                                           		| 33      |
-| `-h`        | `--histogram`       	| Enable histogram data (requires `ENABLE_HISTOGRAM` in Makefile)        		| Off     |
+| `-h`        | `--histogram`       	| Enable histogram data (requires `ENABLE_HISTOGRAM` CMake option)        		| Off     |
 | `-g`        | `--signal`          	| Enable signal strength information                                     		| Off     |
 | `-n`        | `--noise`           	| Enable noise information                                               		| Off     |
 | `-x`        | `--xtalk`           	| Enable crosstalk information                                           		| Off     |
 | `-o <n>`    | `--objects <n>`     	| Number of peaks per pixel                                              		| 1       |
-| `-j`        | `--json`            	| Enable JSON file logging (requires `ENABLE_JSON_LOGGING` in Makefile)  		| Off     |
-| `-k`        | `--keystone`        	| Enable keystone angle calculation (requires `ENABLE_KEYSTONE` in Makefile) 	| Off     |
+| `-j`        | `--json`            	| Enable JSON file logging (requires `ENABLE_JSON_LOGGING` CMake option)  		| Off     |
+| `-k`        | `--keystone`        	| Enable keystone angle calculation (requires `ENABLE_KEYSTONE` CMake option) 	| Off     |
 | `-u`        | `--debug`           	| Enable debug output                                                    		| Off     |
 
 ### Mode Table (`-d` option)
@@ -740,7 +740,7 @@ sudo ./tmf8829 -m -p 33  # 33ms period (faster, the real fps also depends on ite
 
 Enables histogram data capture. This option:
 
-- Must be compiled with `ENABLE_HISTOGRAM=1` in Makefile
+- Must be compiled with `-DENABLE_HISTOGRAM=ON` (the default)
 - Adds ~600KB memory usage
 - Provides raw histogram bin data for each pixel
 - Useful for debugging and signal analysis
@@ -790,7 +790,7 @@ sudo ./tmf8829 -m -o 2  # Detect up to 2 peaks per pixel
 
 Enables JSON file logging. This option:
 
-- Must be compiled with `ENABLE_JSON_LOGGING=1` in Makefile
+- Must be compiled with `-DENABLE_JSON_LOGGING=ON` (the default)
 - Creates compressed JSON files (`.json.gz`)
 - Includes all measurement data and metadata
 - Provides visualization via HTML viewer
@@ -818,7 +818,7 @@ sudo ./tmf8829 -m -u
 
 Enables keystone angle calculation from 3D sensor data. This option:
 
-- Must be compiled with `ENABLE_KEYSTONE=1` in Makefile
+- Must be compiled with `-DENABLE_KEYSTONE=ON` (the default)
 - Calculates X, Y, and Z angles from the sensor data
 - Uses automatic zone pattern for angle calculation
 - Includes denoising for more accurate results
@@ -864,38 +864,44 @@ Comment out this line if you want use I2C bus, for SPI bus, it works with/withou
 
 ### Compilation Options
 
-The Makefile supports the following optional features (defined at the top of the Makefile):
+The CMake build supports the following optional features as cache variables (all enabled by default):
 
-| Feature | Makefile Flag | Description |
-|---------|---------------|-------------|
-| JSON Logging | `ENABLE_JSON_LOGGING = 1` | Enable compressed JSON file output (default: enabled) |
-| Histogram | `ENABLE_HISTOGRAM = 1` | Enable histogram data capture (default: enabled, ~600KB RAM) |
-| Keystone | `ENABLE_KEYSTONE = 1` | Enable angle calculation from 3D data (default: enabled) |
+| Feature | CMake Option | Description |
+|---------|--------------|-------------|
+| JSON Logging | `ENABLE_JSON_LOGGING` | Enable compressed JSON file output (default: ON) |
+| Histogram | `ENABLE_HISTOGRAM` | Enable histogram data capture (default: ON, ~600KB RAM) |
+| Keystone | `ENABLE_KEYSTONE` | Enable angle calculation from 3D data (default: ON) |
 
-To disable a feature, comment out or remove the corresponding flag in the Makefile.
+To disable a feature, pass `-D<OPTION>=OFF` when configuring, e.g.:
+
+```bash
+cmake -S . -B build -DENABLE_HISTOGRAM=OFF
+```
 
 ### Compilation
 
 ```bash
-make
+cmake -S . -B build
+cmake --build build
 ```
 
-This produces the `tmf8829` executable.
+This produces the `tmf8829` executable in the `build/` directory.
 
 ### Clean Build
 
 ```bash
-make clean
-make
+rm -rf build
+cmake -S . -B build
+cmake --build build
 ```
 
 ### Installation (Optional)
 
 ```bash
-sudo make install
+sudo cmake --install build
 ```
 
-This installs the executable to `/usr/local/bin/`.
+This installs the executable to `/usr/local/bin/` (or your platform's default install prefix).
 
 ---
 
@@ -926,7 +932,7 @@ sudo ./tmf8829 -m
 **Symptom**: Application crashes or `malloc` fails.
 
 **Solutions**:
-1. Disable histogram: Comment out `ENABLE_HISTOGRAM` in Makefile to save ~600KB
+1. Disable histogram: Reconfigure with `-DENABLE_HISTOGRAM=OFF` to save ~600KB
 2. Reduce JSON queue: Decrease `JSON_QUEUE_SIZE` in `tmf8829_json.h` to save memory
 3. Use lower resolution: Switch from 48x32 to 32x32 or 16x16
 
@@ -946,7 +952,7 @@ sudo ./tmf8829 -m
 **Symptom**: Histogram data appears corrupted or missing.
 
 **Solutions**:
-1. Verify `ENABLE_HISTOGRAM` is defined in Makefile
+1. Verify `ENABLE_HISTOGRAM` is `ON` in your CMake configuration
 2. Check dual mode configuration
 3. Ensure sufficient memory is available
 4. Run with debug output to trace frame parsing
