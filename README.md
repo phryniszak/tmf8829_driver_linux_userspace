@@ -864,18 +864,19 @@ Comment out this line if you want use I2C bus, for SPI bus, it works with/withou
 
 ### Compilation Options
 
-The CMake build supports the following optional features as cache variables (all enabled by default):
+The CMake build supports the following optional features and settings as cache variables:
 
-| Feature | CMake Option | Description |
+| Feature | CMake Variable | Description |
 |---------|--------------|-------------|
 | JSON Logging | `ENABLE_JSON_LOGGING` | Enable compressed JSON file output (default: ON) |
 | Histogram | `ENABLE_HISTOGRAM` | Enable histogram data capture (default: ON, ~600KB RAM) |
 | Keystone | `ENABLE_KEYSTONE` | Enable angle calculation from 3D data (default: ON) |
+| Enable GPIO Pin | `GPIO_ENABLE_PIN` | GPIO pin number used to drive the chip's enable line (default: 40) |
 
-To disable a feature, pass `-D<OPTION>=OFF` when configuring, e.g.:
+To disable a feature or change a setting, pass `-D<VARIABLE>=<VALUE>` when configuring, e.g.:
 
 ```bash
-cmake -S . -B build -DENABLE_HISTOGRAM=OFF
+cmake -S . -B build -DENABLE_HISTOGRAM=OFF -DGPIO_ENABLE_PIN=17
 ```
 
 ### Compilation

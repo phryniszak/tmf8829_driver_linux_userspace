@@ -28,6 +28,12 @@
 #include "tmf8829_keystone.h"
 #endif
 
+/* GPIO pin number used to drive the chip's enable line, set via the
+ * GPIO_ENABLE_PIN CMake cache variable (defaults to 40). */
+#ifndef GPIO_ENABLE_PIN
+#define GPIO_ENABLE_PIN 40
+#endif
+
 static tmf8829_chip g_tof_chip;
 static volatile sig_atomic_t g_stop_requested = 0;
 
@@ -261,7 +267,7 @@ int main (int argc, char * argv[])
 
     PRINT_DEBUG("driver size:%zu, chip size:%zu\n", sizeof(tmf8829Driver), sizeof(tmf8829_chip));
 
-	tof_chip->gpiod_enable = 40;
+	tof_chip->gpiod_enable = GPIO_ENABLE_PIN;
     enablePinLow(tof_chip);
     if (enablePinHigh(tof_chip) == -1)
         return 0;
