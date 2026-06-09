@@ -6,8 +6,10 @@
             "type": "shell",
             "command": "cmake",
             "args": [
-                "-S", "${workspaceFolder}",
-                "-B", "${workspaceFolder}/build",
+                "-S",
+                "${workspaceFolder}",
+                "-B",
+                "${workspaceFolder}/build",
                 "-DCMAKE_BUILD_TYPE=Debug"
             ],
             "options": {
@@ -20,7 +22,8 @@
             "type": "shell",
             "command": "cmake",
             "args": [
-                "--build", "${workspaceFolder}/build"
+                "--build",
+                "${workspaceFolder}/build"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -30,7 +33,22 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": ["$gcc"]
-        }
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "zip",
+            "type": "shell",
+            "command": "zip",
+            "args": [
+                "-r",
+                "${workspaceFolderBasename}.zip",
+                "${workspaceFolder}",
+                "-x",
+                "*/build/*"
+            ],
+            "problemMatcher": []
+        },
     ]
 }

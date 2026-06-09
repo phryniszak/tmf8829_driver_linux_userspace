@@ -1,6 +1,11 @@
-# TMF8829 MCU Project
+# TMF8829 linux user space project
 
 The TMF8829 MCU Project provides a comprehensive driver and application for the TMF8829 Time-of-Flight (ToF) sensor. This project includes a complete software stack for Linux-based platforms, with support for multiple resolutions, dual mode operation, histogram data capture, and JSON logging.
+
+# Main difference compare to ams-OSRAM/tmf8829_driver_linux_userspace
+
+- CMake build system,
+- no need for root/sudo (thanks to libgpiod)
 
 ## Features
 
@@ -17,7 +22,6 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - GCC compiler with C99 support
 - libgpiod v2 (`libgpiod-dev`) for GPIO control
 - zlib library for JSON compression
-- Root/sudo access for hardware I/O operations
 
 ## Table of Contents
 
@@ -659,7 +663,7 @@ Enables measurement mode. Without this flag, the application will exit immediate
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m
+./tmf8829 -m
 ```
 
 #### `-b` / `--bus`
@@ -671,8 +675,8 @@ Selects communication interface:
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -b 0  # Use I2C
-sudo ./tmf8829 -m -b 1  # Use SPI (default)
+./tmf8829 -m -b 0  # Use I2C
+./tmf8829 -m -b 1  # Use SPI (default)
 ```
 
 #### `-d` / `--mode`
@@ -681,11 +685,11 @@ Selects operating mode (see Mode Table above). Determines resolution and dual mo
 
 **Examples**:
 ```bash
-sudo ./tmf8829 -m -d 0   # 8x8 standard
-sudo ./tmf8829 -m -d 5   # 16x16 standard
-sudo ./tmf8829 -m -d 8   # 32x32 standard
-sudo ./tmf8829 -m -d 11  # 48x32 standard
-sudo ./tmf8829 -m -d 13  # 48x32 dual mode
+./tmf8829 -m -d 0   # 8x8 standard
+./tmf8829 -m -d 5   # 16x16 standard
+./tmf8829 -m -d 8   # 32x32 standard
+./tmf8829 -m -d 11  # 48x32 standard
+./tmf8829 -m -d 13  # 48x32 dual mode
 ```
 
 #### `-t` / `--timeout`
@@ -694,8 +698,8 @@ Sets measurement duration in seconds. Use `0` for continuous operation (runs unt
 
 **Examples**:
 ```bash
-sudo ./tmf8829 -m -t 10  # Run for 10 seconds
-sudo ./tmf8829 -m -t 0   # Run continuously
+./tmf8829 -m -t 10  # Run for 10 seconds
+./tmf8829 -m -t 0   # Run continuously
 ```
 
 #### `-i` / `--iterations`
@@ -704,7 +708,7 @@ Number of measurement iterations for initial capture.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -i 1800  # 1800K iterations
+./tmf8829 -m -i 1800  # 1800K iterations
 ```
 
 #### `-s` / `--shortiterations`
@@ -713,7 +717,7 @@ Number of short iterations (typically for fast initial capture).
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -s 100  # 100K short iterations
+./tmf8829 -m -s 100  # 100K short iterations
 ```
 
 #### `-r` / `--threshold`
@@ -722,8 +726,8 @@ Confidence threshold for filtering results. Pixels with confidence below this va
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -r 20  # Higher threshold (more strict)
-sudo ./tmf8829 -m -r 6   # Lower threshold (sugggested lowest value, more permissive)
+./tmf8829 -m -r 20  # Higher threshold (more strict)
+./tmf8829 -m -r 6   # Lower threshold (sugggested lowest value, more permissive)
 ```
 
 #### `-p` / `--period`
@@ -732,8 +736,8 @@ Measurement period in milliseconds. Controls how often measurements are taken.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -p 100  # 100 period (slower)
-sudo ./tmf8829 -m -p 33  # 33ms period (faster, the real fps also depends on iterations setting)
+./tmf8829 -m -p 100  # 100 period (slower)
+./tmf8829 -m -p 33  # 33ms period (faster, the real fps also depends on iterations setting)
 ```
 
 #### `-h` / `--histogram`
@@ -747,7 +751,7 @@ Enables histogram data capture. This option:
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -h -d 8  # 32x32 with histograms
+./tmf8829 -m -h -d 8  # 32x32 with histograms
 ```
 
 #### `-g` / `--signal`
@@ -756,7 +760,7 @@ Enables signal strength data in results.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -g
+./tmf8829 -m -g
 ```
 
 #### `-n` / `--noise`
@@ -765,7 +769,7 @@ Enables noise data in results.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -n
+./tmf8829 -m -n
 ```
 
 #### `-x` / `--xtalk`
@@ -774,7 +778,7 @@ Enables crosstalk compensation data in results.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -x
+./tmf8829 -m -x
 ```
 
 #### `-o` / `--objects`
@@ -783,7 +787,7 @@ Sets the number of peaks (objects) to detect per pixel (1-4).
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -o 2  # Detect up to 2 peaks per pixel
+./tmf8829 -m -o 2  # Detect up to 2 peaks per pixel
 ```
 
 #### `-j` / `--json`
@@ -802,7 +806,7 @@ tmf8829_<UID>-YYYY-MM-DD-HH-MM-SS.json.gz
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -j -d 8 -t 10  # 32x32 with JSON logging for 10 seconds
+./tmf8829 -m -j -d 8 -t 10  # 32x32 with JSON logging for 10 seconds
 ```
 
 #### `-u` / `--debug`
@@ -811,7 +815,7 @@ Enables verbose debug output for troubleshooting.
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -u
+./tmf8829 -m -u
 ```
 
 #### `-k` / `--keystone`
@@ -825,7 +829,7 @@ Enables keystone angle calculation from 3D sensor data. This option:
 
 **Example**:
 ```bash
-sudo ./tmf8829 -m -k -d 11  # 48x32 with keystone angle calculation
+./tmf8829 -m -k -d 11  # 48x32 with keystone angle calculation
 ```
 
 ---
@@ -911,15 +915,6 @@ This installs the executable to `/usr/local/bin/` (or your platform's default in
 
 ### Common Issues
 
-#### Issue: Permission Denied
-
-**Symptom**: `Permission denied` when running the application.
-
-**Solution**: Run with `sudo` for hardware access:
-```bash
-sudo ./tmf8829 -m
-```
-
 #### Issue: Device Not Found
 
 **Symptom**: `Device not found` or communication errors.
@@ -927,7 +922,6 @@ sudo ./tmf8829 -m
 **Solutions**:
 1. Check hardware connections (SPI/I2C, power, enable pin)
 2. Verify bus type: use `-b 0` for I2C, `-b 1` for SPI
-3. Run with debug: `sudo ./tmf8829 -m -u`
 
 #### Issue: Out of Memory
 
