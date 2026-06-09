@@ -66,6 +66,7 @@ typedef struct _tmf8829_chip
 #endif
     int gpiod_enable;                    /**< GPIO enable pin number */
     uint8_t bustype;                     /**< bus type: BUS_I2C or BUS_SPI */
+    uint8_t stream_enabled;              /**< emit newline-delimited JSON frames to stdout */
 } tmf8829_chip;
 
 /* Configuration functions */

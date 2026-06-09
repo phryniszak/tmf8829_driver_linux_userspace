@@ -32,22 +32,22 @@
 
 /** @brief macros to replace the platform specific printing
  */
-#define PRINT_CHAR(c)                  printf( "%c", c )
-#define PRINT_INT(i)                   printf( "%ld", (long)i )
-#define PRINT_UINT(i)                  printf( "%lu", (unsigned long)i )
-#define PRINT_UINT_HEX(i)              printf( "%lX", (unsigned long)i )
-#define PRINT_STR(str)                 printf( "%s", str )
-#define PRINT_LN()                     printf( "\n" )
+#define PRINT_CHAR(c)                  fprintf( stderr, "%c", c )
+#define PRINT_INT(i)                   fprintf( stderr, "%ld", (long)i )
+#define PRINT_UINT(i)                  fprintf( stderr, "%lu", (unsigned long)i )
+#define PRINT_UINT_HEX(i)              fprintf( stderr, "%lX", (unsigned long)i )
+#define PRINT_STR(str)                 fprintf( stderr, "%s", str )
+#define PRINT_LN()                     fprintf( stderr, "\n" )
 
 extern int g_debug_enabled;
 
 #define PRINT_DEBUG(fmt, ...)          do { \
                                             if (g_debug_enabled) { \
-                                                printf(fmt, ##__VA_ARGS__); \
+                                                fprintf( stderr, fmt, ##__VA_ARGS__); \
                                             } \
                                         } while (0)
 
-#define PRINT_INFO(fmt, ...)           printf(fmt, ##__VA_ARGS__)
+#define PRINT_INFO(fmt, ...)           fprintf( stderr, fmt, ##__VA_ARGS__)
 
 /** Which character to use to separate the entries in printing */
 #define SEPARATOR                      ','

@@ -68,6 +68,7 @@ static void usage(const char *program)
 #ifdef ENABLE_KEYSTONE
     printf("    -k, --keystone            : enable keystone angle calculation (default: disabled)\n");
 #endif
+    printf("    -S, --stream              : stream JSON frames to stdout (for websocketd)\n");
     printf("    -u, --debug               : enable debug print output (default: disabled)\n");
     printf("\n\n");
 }
@@ -103,6 +104,7 @@ int main (int argc, char * argv[])
 #ifdef ENABLE_KEYSTONE
     int enable_keystone = 0;   /* default 0: disabled */
 #endif
+    int enable_stream = 0;  /* default 0: disabled */
     int num_peaks = 1;      /* default 1 */
     time_t start_time;
     tmf8829_cfg_t tof_cfg;
@@ -134,11 +136,12 @@ int main (int argc, char * argv[])
 #ifdef ENABLE_KEYSTONE
         {"keystone",        no_argument,       0, 'k'},
 #endif
+        {"stream",          no_argument,       0, 'S'},
         {"debug",           no_argument,       0, 'u'},
         {0, 0, 0, 0}
     };
 
-    while ((c = getopt_long(argc, argv, "mb:d:t:i:s:r:p:hgnxo:jku", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "mb:d:t:i:s:r:p:hgnxo:jkSu", long_options, NULL)) != -1) {
         switch (c) {
             case 'm':
                 is_measurement = 1;
@@ -246,6 +249,12 @@ int main (int argc, char * argv[])
                 break;
             }
 #endif
+            case 'S':
+            {
+                enable_stream = 1;
+                PRINT_INFO("JSON stream enabled\n");
+                break;
+            }
             case 'u':
             {
                 g_debug_enabled = 1;
@@ -310,6 +319,7 @@ int main (int argc, char * argv[])
 #ifdef ENABLE_KEYSTONE
     tof_chip->keystoneEnabled = enable_keystone;
 #endif
+    tof_chip->stream_enabled = enable_stream;
 
     tmf8829_set_busType(tof_chip, bus_type);
     if (tmf8829_probe(tof_chip) == -1)

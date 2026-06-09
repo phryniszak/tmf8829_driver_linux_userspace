@@ -13,6 +13,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - **Dual Mode Operation**: High Accuracy (HA) and Default mode switching
 - **Histogram Data Capture**: Optional histogram data for detailed analysis
 - **JSON Logging**: Compressed JSON file output with metadata
+- **JSON Streaming**: One JSON object per frame written to stdout (newline-delimited) for real-time forwarding via `websocketd` or similar tools
 - **Keystone Angle Calculation**: Calculate X, Y, Z angles from sensor data with optional denoising
 - **Flexible Configuration**: Extensive command-line parameters for customization
 
@@ -633,6 +634,7 @@ This section provides detailed descriptions of all command-line options.
 | `-x`        | `--xtalk`           	| Enable crosstalk information                                           		| Off     |
 | `-o <n>`    | `--objects <n>`     	| Number of peaks per pixel                                              		| 1       |
 | `-j`        | `--json`            	| Enable JSON file logging (requires `ENABLE_JSON_LOGGING` CMake option)  		| Off     |
+| `-S`        | `--stream`          	| Stream one JSON frame per line to stdout (for `websocketd`)             		| Off     |
 | `-k`        | `--keystone`        	| Enable keystone angle calculation (requires `ENABLE_KEYSTONE` CMake option) 	| Off     |
 | `-u`        | `--debug`           	| Enable debug output                                                    		| Off     |
 
@@ -832,6 +834,35 @@ Enables keystone angle calculation from 3D sensor data. This option:
 ./tmf8829 -m -k -d 11  # 48x32 with keystone angle calculation
 ```
 
+#### `-S` / `--stream`
+
+Enables real-time JSON streaming to stdout. Each complete frame is written as a single
+newline-terminated JSON object so external tools can consume it line by line.
+
+- Works independently of `--json` (file logging); both can be used simultaneously
+- All diagnostic output (boot messages, frame grids, FPS stats) is written to **stderr**,
+  keeping stdout clean for the JSON data
+- Call `fflush(stdout)` is issued after every frame so pipes and WebSocket bridges receive
+  data immediately without buffering delays
+
+**JSON format per frame** (same field names as the file logger, no histogram data):
+```json
+{"info":{"frame_number":N,"read_time":T,"systick_t0":T0,"systick_t1":T1,"temperature":C,"warnings":W},"results":[[{"noise":0,"peaks":[{"distance":D,"signal":S,"snr":R,"x":"X.XX","y":"Y.YY","z":"Z.ZZ"}],"xtalk":0},...],...]}\n
+```
+
+**Example — pipe to a simple consumer**:
+```bash
+./tmf8829 -m -t 0 --stream 2>/dev/null | while read line; do echo "$line" | python3 -c "import sys,json; f=json.load(sys.stdin); print(f['info']['frame_number'])"; done
+```
+
+**Example — expose over WebSocket with `websocketd`**:
+```bash
+websocketd --port 8080 ./tmf8829 -m -t 0 --stream
+```
+
+Any WebSocket client connecting to `ws://host:8080` then receives one JSON message per
+sensor frame (~11 FPS in 8x8 mode).
+
 ---
 
 ## Building and Installation
@@ -968,11 +999,3 @@ This installs the executable to `/usr/local/bin/` (or your platform's default in
 This project is licensed under GPL-2.0 OR MIT. See LICENSE files for details.
 
 ---
-
-## Contact
-
-For support or questions related to this project, please refer to the official ams OSRAM support channels.
-
----
-
-*Last Updated: 2026-04-03*

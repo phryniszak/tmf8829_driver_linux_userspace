@@ -816,6 +816,8 @@ void handleReceivedHistogramData(void *dptr, uint8_t *data, uint16_t size)
 }
 #endif /* ENABLE_HISTOGRAM */
 
+static void tmf8829StreamFrameJson(tmf8829_chip *chip, uint8_t resultFormat);
+
 void handleReceivedResultDataEnd(void *dptr)
 {
     tmf8829_chip *chip = (tmf8829_chip *)dptr;
@@ -1040,6 +1042,9 @@ void handleReceivedResultDataEnd(void *dptr)
     }
 #endif
 
+    if (chip->stream_enabled && parser->resultReady)
+        tmf8829StreamFrameJson(chip, resultFormat);
+
 #ifdef ENABLE_KEYSTONE
     /* Perform keystone angle calculation if enabled */
     /* resultReady is only set to 1 when complete result frame is received:
@@ -1188,6 +1193,69 @@ void handleReceivedHistogramDataEnd(void *dptr)
     (void)dptr;
 }
 #endif /* ENABLE_HISTOGRAM */
+
+/* ============================================================================
+ * JSON Streaming (stdout, newline-delimited, for websocketd)
+ * ============================================================================ */
+
+static void tmf8829StreamFrameJson(tmf8829_chip *chip, uint8_t resultFormat)
+{
+    tmf8829FrameParser_t *parser = &chip->frameParser;
+    tmf8829FrameData_t   *frame  = &parser->frame;
+    int row, col, i;
+    int numPeaks  = resultFormat & TMF8829_CFG_RESULT_FORMAT_NR_PEAKS_MASK;
+    int useSignal = (resultFormat & TMF8829_CFG_RESULT_FORMAT_SIGNAL_STRENGTH_MASK) ? 1 : 0;
+    int useNoise  = (resultFormat & TMF8829_CFG_RESULT_FORMAT_NOISE_STRENGTH_MASK)  ? 1 : 0;
+    int useXtalk  = (resultFormat & TMF8829_CFG_RESULT_FORMAT_XTALK_MASK)           ? 1 : 0;
+
+    if (numPeaks == 0) numPeaks = 1;
+
+    fprintf(stdout,
+            "{\"info\":{"
+            "\"frame_number\":%u,"
+            "\"read_time\":%u,"
+            "\"systick_t0\":%u,"
+            "\"systick_t1\":%u,"
+            "\"temperature\":%d,"
+            "\"warnings\":%d"
+            "},\"results\":[",
+            frame->frameNumber, frame->systick,
+            frame->t0Integration, frame->t1Integration,
+            frame->temperature, frame->warnings);
+
+    for (row = 0; row < frame->numRows; row++)
+    {
+        fprintf(stdout, "[");
+        for (col = 0; col < frame->numCols; col++)
+        {
+            tmf8829PixelResult_t *pixel =
+                &parser->pixelResults[row * frame->numCols + col];
+
+            fprintf(stdout, "{\"noise\":%d,\"peaks\":[",
+                    useNoise ? pixel->noise : 0);
+
+            for (i = 0; i < numPeaks; i++)
+            {
+                fprintf(stdout,
+                        "{\"distance\":%d,\"signal\":%d,\"snr\":%d,"
+                        "\"x\":\"%.2f\",\"y\":\"%.2f\",\"z\":\"%.2f\"}%s",
+                        pixel->peaks[i].distance,
+                        useSignal ? pixel->peaks[i].signal : 0,
+                        pixel->peaks[i].snr,
+                        pixel->peaks[i].x, pixel->peaks[i].y, pixel->peaks[i].z,
+                        i < numPeaks - 1 ? "," : "");
+            }
+
+            fprintf(stdout, "],\"xtalk\":%d}%s",
+                    useXtalk ? pixel->xtalk : 0,
+                    col < frame->numCols - 1 ? "," : "");
+        }
+        fprintf(stdout, "]%s", row < frame->numRows - 1 ? "," : "");
+    }
+
+    fprintf(stdout, "]}\n");
+    fflush(stdout);
+}
 
 /* ============================================================================
  * Print Functions
