@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow: hidden; }
   body { background: #1a1a1a; color: #ddd; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; height: 100vh; }
 
   header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #252525; border-bottom: 1px solid #333; flex-wrap: wrap; }
@@ -39,6 +40,20 @@
   #scale-labels { display: flex; justify-content: space-between; font-size: 10px; color: #888; min-width: 240px; padding: 0 2px; }
 
   #no-data { position: absolute; color: #555; font-size: 16px; pointer-events: none; }
+
+  #params { background: #1e1e1e; border-bottom: 1px solid #333; font-size: 12px; }
+  #params summary { padding: 5px 12px; cursor: pointer; color: #aaa; user-select: none; }
+  #params summary:hover { color: #fff; }
+  #params-body { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 8px 14px 10px; }
+  #params-body label { color: #888; }
+  #params-body select, #params-body input[type=number] {
+    background: #333; border: 1px solid #555; color: #ddd;
+    padding: 2px 5px; border-radius: 3px; font-size: 12px; font-family: monospace;
+  }
+  #params-body input[type=number] { width: 60px; }
+  #params-body input[type=checkbox] { accent-color: #3a6; cursor: pointer; }
+  #btn-apply { background: #3a6; border: none; color: #fff; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: auto; }
+  #btn-apply:hover { background: #4bb; }
 </style>
 </head>
 <body>
@@ -58,6 +73,37 @@
     </select>
   </div>
 </header>
+
+<details id="params">
+  <summary>Parameters</summary>
+  <div id="params-body">
+    <label>Mode:
+      <select id="p-mode">
+        <option value="0">0 — 8×8</option>
+        <option value="1">1 — 8×8 long range</option>
+        <option value="2">2 — 8×8 high accuracy</option>
+        <option value="3">3 — 8×8 dual</option>
+        <option value="4">4 — 8×8 long range dual</option>
+        <option value="5">5 — 16×16</option>
+        <option value="6">6 — 16×16 high accuracy</option>
+        <option value="7">7 — 16×16 dual</option>
+        <option value="8">8 — 32×32</option>
+        <option value="9">9 — 32×32 high accuracy</option>
+        <option value="10">10 — 32×32 dual</option>
+        <option value="11">11 — 48×32</option>
+        <option value="12">12 — 48×32 high accuracy</option>
+        <option value="13">13 — 48×32 dual</option>
+      </select>
+    </label>
+    <label>Period (ms): <input id="p-period" type="number" value="33" min="10" max="500"></label>
+    <label>Peaks: <input id="p-peaks" type="number" value="1" min="1" max="4"></label>
+    <label>Threshold: <input id="p-threshold" type="number" value="6" min="0" max="255"></label>
+    <label><input id="p-signal" type="checkbox"> Signal</label>
+    <label><input id="p-noise"  type="checkbox"> Noise</label>
+    <label><input id="p-xtalk" type="checkbox"> Xtalk</label>
+    <button id="btn-apply">Apply</button>
+  </div>
+</details>
 
 <div id="stats">
   <span><span class="stat-label">Frame </span><span class="stat-value" id="s-frame">—</span></span>
@@ -101,12 +147,27 @@ urlInput.value    = 'ws://' + window.location.host;
 const btnConnect  = document.getElementById('btn-connect');
 const statusDot   = document.getElementById('status-dot');
 const peakSelect  = document.getElementById('peak-select');
+const pMode      = document.getElementById('p-mode');
+const pPeriod    = document.getElementById('p-period');
+const pPeaks     = document.getElementById('p-peaks');
+const pThreshold = document.getElementById('p-threshold');
+const pSignal    = document.getElementById('p-signal');
+const pNoise     = document.getElementById('p-noise');
+const pXtalk     = document.getElementById('p-xtalk');
+const btnApply   = document.getElementById('btn-apply');
 const noData      = document.getElementById('no-data');
 const tooltip     = document.getElementById('tooltip');
 const gridCanvas  = document.getElementById('grid-canvas');
 const scaleCanvas = document.getElementById('scale-canvas');
 const ctx         = gridCanvas.getContext('2d');
 const sctx        = scaleCanvas.getContext('2d');
+
+// ── Parameter config line ──────────────────────────────────────────────────
+function buildConfigLine() {
+  return `mode=${pMode.value} period=${pPeriod.value} peaks=${pPeaks.value} ` +
+         `threshold=${pThreshold.value} signal=${pSignal.checked?1:0} ` +
+         `noise=${pNoise.checked?1:0} xtalk=${pXtalk.checked?1:0}`;
+}
 
 // ── Colour mapping ─────────────────────────────────────────────────────────
 // distance 0   → grey  #555
@@ -178,10 +239,6 @@ function renderFrame(frame) {
     }
   }
 
-  // Scale bar
-  scaleCanvas.width = scaleCanvas.parentElement.clientWidth
-    - document.getElementById('scale-labels').offsetWidth - 10;
-  scaleCanvas.height = 16;
   drawScaleBar(Math.round(displayMax));
 
   // Stats
@@ -257,6 +314,9 @@ function connect() {
     setStatus('connected');
     btnConnect.textContent = 'Disconnect';
     btnConnect.className = 'disconnect';
+    ws.send(buildConfigLine());
+    // keep peak selector in sync with requested number of peaks
+    peakSelect.value = Math.min(parseInt(pPeaks.value, 10) - 1, 3).toString();
   };
 
   ws.onmessage = (e) => {
@@ -294,12 +354,25 @@ btnConnect.addEventListener('click', () => {
 
 peakSelect.addEventListener('change', () => { if (lastFrame) renderFrame(lastFrame); });
 
-// Redraw on window resize
-window.addEventListener('resize', () => { if (lastFrame) renderFrame(lastFrame); });
+btnApply.addEventListener('click', () => {
+  // Reconnect so the new process gets the updated config via onopen
+  disconnect();
+  setTimeout(connect, 100);
+});
 
-// Initial scale bar
-scaleCanvas.width = 400; scaleCanvas.height = 16;
-drawScaleBar(4000);
+function resizeScaleBar() {
+  scaleCanvas.width  = scaleCanvas.parentElement.clientWidth
+                       - document.getElementById('scale-labels').offsetWidth - 10;
+  scaleCanvas.height = 16;
+  drawScaleBar(Math.round(displayMax));
+}
+
+window.addEventListener('resize', () => {
+  resizeScaleBar();
+  if (lastFrame) renderFrame(lastFrame);
+});
+
+resizeScaleBar();
 </script>
 </body>
 </html>

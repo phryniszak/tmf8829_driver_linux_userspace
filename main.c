@@ -15,6 +15,8 @@
 #include <signal.h>
 #include <time.h>
 #include <getopt.h>
+#include <sys/select.h>
+#include <unistd.h>
 
 #include "tmf8829.h"
 #include "tmf8829_driver.h"
@@ -36,6 +38,23 @@
 
 static tmf8829_chip g_tof_chip;
 static volatile sig_atomic_t g_stop_requested = 0;
+
+static void parse_stream_config(char *line, int *mode, int *period, int *num_peaks,
+                                int *signal, int *noise, int *xtalk, int *threshold)
+{
+    char *token = strtok(line, " \t\r\n");
+    while (token) {
+        int val;
+        if      (sscanf(token, "mode=%d",      &val) == 1) *mode      = val;
+        else if (sscanf(token, "period=%d",    &val) == 1) *period    = val;
+        else if (sscanf(token, "peaks=%d",     &val) == 1) *num_peaks = val;
+        else if (sscanf(token, "signal=%d",    &val) == 1) *signal    = val;
+        else if (sscanf(token, "noise=%d",     &val) == 1) *noise     = val;
+        else if (sscanf(token, "xtalk=%d",     &val) == 1) *xtalk     = val;
+        else if (sscanf(token, "threshold=%d", &val) == 1) *threshold = val;
+        token = strtok(NULL, " \t\r\n");
+    }
+}
 
 static void usage(const char *program)
 {
@@ -275,6 +294,24 @@ int main (int argc, char * argv[])
     }
 
     PRINT_DEBUG("driver size:%zu, chip size:%zu\n", sizeof(tmf8829Driver), sizeof(tmf8829_chip));
+
+    if (enable_stream) {
+        /* Wait up to 1 s for a browser config line sent by websocketd over stdin.
+         * Format: "mode=5 period=50 peaks=2 signal=1 noise=0 xtalk=0 threshold=6"
+         * Unknown keys are ignored; missing keys keep their command-line defaults. */
+        fd_set rfds;
+        struct timeval tv = { 1, 0 };
+        FD_ZERO(&rfds);
+        FD_SET(STDIN_FILENO, &rfds);
+        if (select(STDIN_FILENO + 1, &rfds, NULL, NULL, &tv) > 0) {
+            char cfg_line[256] = "";
+            if (fgets(cfg_line, sizeof(cfg_line), stdin)) {
+                parse_stream_config(cfg_line, &mode, &period, &num_peaks,
+                                    &enable_signal, &enable_noise, &enable_xtalk, &threshold);
+                PRINT_INFO("Stream config: %s", cfg_line);
+            }
+        }
+    }
 
 	tof_chip->gpiod_enable = GPIO_ENABLE_PIN;
     enablePinLow(tof_chip);

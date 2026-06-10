@@ -734,6 +734,7 @@ in real time. No build step or external dependencies are required.
 - Hover tooltip showing distance, SNR, signal, and X/Y/Z coordinates per pixel
 - Live FPS counter, frame number, temperature, and warnings
 - Peak selector to switch between peak 0–3 in multi-peak mode
+- **Parameters panel**: configure mode, period, peaks, threshold, signal/noise/xtalk from the browser — applied on every (re)connect without restarting `websocketd`
 
 **Quickstart with `--staticdir`** (serves the HTML and the WebSocket on the same port):
 ```bash
@@ -742,6 +743,19 @@ websocketd --port 8080 --staticdir=tools_stream ./build/tmf8829 -m -t 0 --stream
 
 Then open `http://<device-ip>:8080` in any browser on the network. The page automatically
 connects its WebSocket to the same host and port it was loaded from.
+
+**Configuring parameters from the browser**: open the *Parameters* panel, adjust the
+controls, and click **Apply**. The page reconnects and immediately sends a config line to
+the new sensor process via stdin:
+
+```
+mode=5 period=50 peaks=2 threshold=6 signal=0 noise=0 xtalk=0
+```
+
+`websocketd` spawns a fresh `tmf8829` process for each browser connection. When
+`--stream` is active the driver waits up to 1 second for this line before starting
+measurement, then overrides its command-line defaults with the received values. If no
+config line arrives (e.g. CLI-only use) the command-line defaults are used unchanged.
 
 **VS Code task**: Use **Terminal → Run Task → Stream: websocketd** to launch the above
 command directly from the editor. The task is configured in `.vscode/tasks.json`.
