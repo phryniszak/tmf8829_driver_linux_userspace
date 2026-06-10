@@ -50,5 +50,29 @@
             ],
             "problemMatcher": []
         },
+        {
+            "label": "Stream: websocketd",
+            "type": "shell",
+            "command": "websocketd",
+            "args": [
+                "--port=8080",
+                "--staticdir=${workspaceFolder}/tools_stream",
+                "${workspaceFolder}/build/tmf8829",
+                "-m",
+                "-t",
+                "0",
+                "--stream"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
     ]
 }

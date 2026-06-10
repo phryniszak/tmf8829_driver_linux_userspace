@@ -6,6 +6,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 
 - CMake build system,
 - no need for root/sudo (thanks to libgpiod)
+- possibilities to stream frames as json
 
 ## Features
 
@@ -14,6 +15,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - **Histogram Data Capture**: Optional histogram data for detailed analysis
 - **JSON Logging**: Compressed JSON file output with metadata
 - **JSON Streaming**: One JSON object per frame written to stdout (newline-delimited) for real-time forwarding via `websocketd` or similar tools
+- **Live Distance Map Viewer**: Self-contained HTML page (`tools_stream/index.html`) displaying a colour-coded 2D distance grid over WebSocket
 - **Keystone Angle Calculation**: Calculate X, Y, Z angles from sensor data with optional denoising
 - **Flexible Configuration**: Extensive command-line parameters for customization
 
@@ -23,17 +25,6 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - GCC compiler with C99 support
 - libgpiod v2 (`libgpiod-dev`) for GPIO control
 - zlib library for JSON compression
-
-## Table of Contents
-
-1. [File Architecture](#file-architecture)
-2. [Porting Guide](#porting-guide)
-3. [Memory Usage](#memory-usage)
-4. [Frame Parser Pattern](#frame-parser-pattern)
-5. [Command Line Parameters](#command-line-parameters)
-6. [Building and Installation](#building-and-installation)
-7. [Usage Examples](#usage-examples)
-8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -190,138 +181,6 @@ Verify porting success:
 2. **Device Identification**: Verify chip ID register reads correctly
 3. **Simple Measurement**: Test basic 8x8 mode without histogram/JSON
 4. **Full Features**: Gradually enable histogram and JSON features
-
----
-
-## Memory Usage
-
-This section provides detailed memory usage calculations for different configurations.
-
-### Memory Components
-
-The application uses the following major memory allocations:
-
-1. **Core Driver**: Fixed ~32KB
-2. **Frame Parser**: Variable based on configuration
-3. **JSON Logger**: Variable based on queue size and frame data
-4. **Stack**: ~16KB typical
-5. **Other**: ~10KB
-
-### Memory Usage by Configuration
-
-#### Configuration 1: Basic Mode (No `-h`, No `-j`)
-
-**Description**: Basic measurement without histogram data or JSON logging
-
-**Memory Calculation**:
-```
-Core Driver:                    32,000 bytes
-Frame Parser:
-  - Result Buffer:              23,040 bytes (48x32 × 15 bytes)
-  - Pixel Results:              23,040 bytes (48x32 × 15 bytes)
-JSON Logger:                    0 bytes (disabled)
-Stack:                          16,000 bytes
-Other:                          10,000 bytes
-------------------------------------------------
-Total:                        104,080 bytes ≈ 102 KB
-```
-
-**Usage**: Suitable for memory-constrained systems (≥256KB RAM)
-
----
-
-#### Configuration 2: Histogram Enabled (`-h`, No `-j`)
-
-**Description**: Measurement with histogram data capture, no JSON logging
-
-**Memory Calculation**:
-```
-Core Driver:                    32,000 bytes
-Frame Parser:
-  - Result Buffer:              23,040 bytes
-  - Pixel Results:              23,040 bytes
-  - Histogram Accumulation:    310,000 bytes (max for 48x32)
-  - Default Histograms:        307,200 bytes (1536 × 64 bins × 4 bytes)
-  - HA Histograms:             307,200 bytes (dual mode only)
-JSON Logger:                    0 bytes (disabled)
-Stack:                          16,000 bytes
-Other:                          10,000 bytes
-------------------------------------------------
-Total (Non-Dual):              711,280 bytes ≈ 695 KB
-Total (Dual):                1,018,480 bytes ≈ 995 KB
-```
-
-**Memory Impact**:
-- Non-dual mode: Adds ~600KB over basic mode
-- Dual mode: Adds ~900KB over basic mode
-
-**Usage**: Requires ≥1.5MB RAM for dual mode
-
----
-
-#### Configuration 3: JSON Enabled (No `-h`, With `-j`)
-
-**Description**: JSON logging without histogram data
-
-**Memory Calculation**:
-```
-Core Driver:                    32,000 bytes
-Frame Parser:
-  - Result Buffer:              23,040 bytes
-  - Pixel Results:              23,040 bytes
-JSON Logger:
-  - Frame Queue:                737,280 bytes (64 frames × 11.5KB avg)
-  - Metadata & Thread:           50,000 bytes
-Stack:                          16,000 bytes
-Other:                          10,000 bytes
-------------------------------------------------
-Total:                        891,360 bytes ≈ 870 KB
-```
-
-**Memory Impact**: Adds ~770KB over basic mode
-
-**Usage**: Requires ≥1MB RAM
-
----
-
-#### Configuration 4: Histogram + JSON (`-h` + `-j`)
-
-**Description**: Full feature mode with histogram data and JSON logging
-
-**Memory Calculation**:
-```
-Core Driver:                    32,000 bytes
-Frame Parser:
-  - Result Buffer:              23,040 bytes
-  - Pixel Results:              23,040 bytes
-  - Histogram Accumulation:    310,000 bytes
-  - Default Histograms:        307,200 bytes
-  - HA Histograms:             307,200 bytes (dual mode only)
-JSON Logger:
-  - Frame Queue:              3,276,800 bytes (64 frames × 51KB avg with histogram)
-  - Metadata & Thread:          50,000 bytes
-Stack:                          16,000 bytes
-Other:                          10,000 bytes
-------------------------------------------------
-Total (Non-Dual):            4,345,280 bytes ≈ 4.24 MB
-Total (Dual):              4,652,480 bytes ≈ 4.54 MB
-```
-
-**Memory Impact**:
-- Non-dual mode: ~4.24MB total
-- Dual mode: ~4.54MB total
-
-**Usage**: Requires ≥5MB RAM
-
----
-
-### Memory Optimization Tips
-
-1. **Disable Histogram**: Configure with `-DENABLE_HISTOGRAM=OFF` to save ~600KB
-2. **Reduce JSON Queue**: Reduce `JSON_QUEUE_SIZE` in `tmf8829_json.h` to save memory
-3. **Lower Resolution**: Use 8x8 or 16x16 modes to reduce memory requirements
-4. **Disable Dual Mode**: Avoid dual mode to reduce histogram memory by 50%
-5. **Static Allocation**: Use static buffers instead of malloc if heap fragmentation is an issue
 
 ---
 
@@ -863,6 +722,33 @@ websocketd --port 8080 ./tmf8829 -m -t 0 --stream
 Any WebSocket client connecting to `ws://host:8080` then receives one JSON message per
 sensor frame (~11 FPS in 8x8 mode).
 
+#### Live Distance Map Viewer
+
+The `tools_stream/index.html` file is a self-contained browser-based viewer that
+connects to the `websocketd` WebSocket and renders each frame as a colour-coded 2D grid
+in real time. No build step or external dependencies are required.
+
+**Features:**
+- Colour scale: red = near, blue = far, dark grey = no target (distance 0)
+- Auto-scaling distance range, damped over 30 frames to avoid flicker
+- Hover tooltip showing distance, SNR, signal, and X/Y/Z coordinates per pixel
+- Live FPS counter, frame number, temperature, and warnings
+- Peak selector to switch between peak 0–3 in multi-peak mode
+
+**Quickstart with `--staticdir`** (serves the HTML and the WebSocket on the same port):
+```bash
+websocketd --port 8080 --staticdir=tools_stream ./build/tmf8829 -m -t 0 --stream
+```
+
+Then open `http://<device-ip>:8080` in any browser on the network. The page automatically
+connects its WebSocket to the same host and port it was loaded from.
+
+**VS Code task**: Use **Terminal → Run Task → Stream: websocketd** to launch the above
+command directly from the editor. The task is configured in `.vscode/tasks.json`.
+
+
+![stream browser](pictures/Screenshot_000.png)
+
 ---
 
 ## Building and Installation
@@ -953,15 +839,6 @@ This installs the executable to `/usr/local/bin/` (or your platform's default in
 **Solutions**:
 1. Check hardware connections (SPI/I2C, power, enable pin)
 2. Verify bus type: use `-b 0` for I2C, `-b 1` for SPI
-
-#### Issue: Out of Memory
-
-**Symptom**: Application crashes or `malloc` fails.
-
-**Solutions**:
-1. Disable histogram: Reconfigure with `-DENABLE_HISTOGRAM=OFF` to save ~600KB
-2. Reduce JSON queue: Decrease `JSON_QUEUE_SIZE` in `tmf8829_json.h` to save memory
-3. Use lower resolution: Switch from 48x32 to 32x32 or 16x16
 
 #### Issue: No Data Frames or Frames lost
 
