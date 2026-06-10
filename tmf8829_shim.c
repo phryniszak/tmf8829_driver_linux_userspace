@@ -86,7 +86,7 @@ out:
 // spi implemented function
 
 #define SPI_CHANNEL                0
-#define SPI_MAX_SPEED              1000000
+#define SPI_MAX_SPEED              10000000
 #define SPI_WR_CMD                 0x02
 #define SPI_RD_CMD                 0x03
 

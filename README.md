@@ -760,8 +760,8 @@ config line arrives (e.g. CLI-only use) the command-line defaults are used uncha
 **VS Code task**: Use **Terminal → Run Task → Stream: websocketd** to launch the above
 command directly from the editor. The task is configured in `.vscode/tasks.json`.
 
-
-![stream browser](pictures/Screenshot_000.png)
+![hand in view](pictures/Screenshot_hand.png)
+Hand in view of tmf8829
 
 ---
 
