@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMF8829 3D Scatter Plot</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow: hidden; }
+  body { background: #1a1a1a; color: #ddd; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; height: 100vh; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #252525; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  header h1 { font-size: 14px; font-weight: bold; color: #fff; white-space: nowrap; }
+
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #888; flex-shrink: 0; }
+  #status-dot.connecting { background: #f0c040; }
+  #status-dot.connected  { background: #44cc44; }
+  #status-dot.error      { background: #cc4444; }
+
+  #ws-url { background: #333; border: 1px solid #555; color: #ddd; padding: 3px 6px; border-radius: 3px; width: 220px; font-family: monospace; font-size: 12px; }
+  #btn-connect { background: #3a6; border: none; color: #fff; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+  #btn-connect.disconnect { background: #a33; }
+
+  #stats { display: flex; gap: 16px; padding: 5px 12px; background: #202020; border-bottom: 1px solid #333; font-size: 12px; flex-wrap: wrap; }
+  .stat-label { color: #888; }
+  .stat-value { color: #eee; }
+
+  #params { background: #1e1e1e; border-bottom: 1px solid #333; font-size: 12px; }
+  #params summary { padding: 5px 12px; cursor: pointer; color: #aaa; user-select: none; }
+  #params summary:hover { color: #fff; }
+  #params-body { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 8px 14px 10px; }
+  #params-body label { color: #888; }
+  #params-body select, #params-body input[type=number] {
+    background: #333; border: 1px solid #555; color: #ddd;
+    padding: 2px 5px; border-radius: 3px; font-size: 12px; font-family: monospace;
+  }
+  #params-body input[type=number] { width: 60px; }
+  #params-body input[type=checkbox] { accent-color: #3a6; cursor: pointer; }
+  #btn-apply { background: #3a6; border: none; color: #fff; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: auto; }
+  #btn-apply:hover { background: #4bb; }
+
+  #canvas-container { flex: 1; position: relative; overflow: hidden; }
+  #canvas-container canvas { display: block; }
+  #no-data { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #555; font-size: 16px; pointer-events: none; }
+</style>
+<script type="importmap">
+{"imports":{
+  "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+
+<header>
+  <h1>TMF8829 3D Scatter Plot</h1>
+  <div id="status-dot"></div>
+  <input id="ws-url" type="text" spellcheck="false">
+  <button id="btn-connect">Connect</button>
+</header>
+
+<details id="params">
+  <summary>Parameters</summary>
+  <div id="params-body">
+    <label>Mode:
+      <select id="p-mode">
+        <option value="0">0 — 8×8</option>
+        <option value="1">1 — 8×8 long range</option>
+        <option value="2">2 — 8×8 high accuracy</option>
+        <option value="3">3 — 8×8 dual</option>
+        <option value="4">4 — 8×8 long range dual</option>
+        <option value="5">5 — 16×16</option>
+        <option value="6">6 — 16×16 high accuracy</option>
+        <option value="7">7 — 16×16 dual</option>
+        <option value="8">8 — 32×32</option>
+        <option value="9">9 — 32×32 high accuracy</option>
+        <option value="10">10 — 32×32 dual</option>
+        <option value="11">11 — 48×32</option>
+        <option value="12">12 — 48×32 high accuracy</option>
+        <option value="13">13 — 48×32 dual</option>
+      </select>
+    </label>
+    <label>Period (ms): <input id="p-period" type="number" value="33" min="10" max="500"></label>
+    <label>Peaks: <input id="p-peaks" type="number" value="1" min="1" max="4"></label>
+    <label>Threshold: <input id="p-threshold" type="number" value="6" min="0" max="255"></label>
+    <label><input id="p-signal" type="checkbox"> Signal</label>
+    <label><input id="p-noise"  type="checkbox"> Noise</label>
+    <label><input id="p-xtalk" type="checkbox"> Xtalk</label>
+    <span style="border-left:1px solid #444;margin:0 4px;height:20px;display:inline-block"></span>
+    <label>Display:
+      <select id="p-display">
+        <option value="distance">Only Distance</option>
+        <option value="confidence">Show Confidence</option>
+        <option value="colored">Colored Distance</option>
+        <option value="perf">GUI Performance Mode</option>
+      </select>
+    </label>
+    <label>Max Z (mm): <input id="p-maxz" type="number" value="4000" min="100" max="9999"></label>
+    <label><input id="p-tilt" type="checkbox"> Tilt Axis</label>
+    <button id="btn-apply">Apply</button>
+  </div>
+</details>
+
+<div id="stats">
+  <span><span class="stat-label">Frame </span><span class="stat-value" id="s-frame">—</span></span>
+  <span><span class="stat-label">Temp </span><span class="stat-value" id="s-temp">—</span></span>
+  <span><span class="stat-label">Warn </span><span class="stat-value" id="s-warn">—</span></span>
+  <span><span class="stat-label">FPS </span><span class="stat-value" id="s-fps">—</span></span>
+  <span><span class="stat-label">Targets </span><span class="stat-value" id="s-targets">—</span></span>
+</div>
+
+<div id="canvas-container">
+  <span id="no-data">Waiting for data…</span>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const urlInput   = document.getElementById('ws-url');
+urlInput.value   = 'ws://' + window.location.host;
+const btnConnect = document.getElementById('btn-connect');
+const statusDot  = document.getElementById('status-dot');
+const pMode      = document.getElementById('p-mode');
+const pPeriod    = document.getElementById('p-period');
+const pPeaks     = document.getElementById('p-peaks');
+const pThreshold = document.getElementById('p-threshold');
+const pSignal    = document.getElementById('p-signal');
+const pNoise     = document.getElementById('p-noise');
+const pXtalk     = document.getElementById('p-xtalk');
+const pDisplay   = document.getElementById('p-display');
+const pMaxZ      = document.getElementById('p-maxz');
+const pTilt      = document.getElementById('p-tilt');
+const btnApply   = document.getElementById('btn-apply');
+const noData     = document.getElementById('no-data');
+const container  = document.getElementById('canvas-container');
+
+// ── State ──────────────────────────────────────────────────────────────────
+let ws = null;
+let autoReconnectTimer = null;
+let frameTimestamps = [];
+
+// ── Three.js scene ─────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x1a1a1a);
+container.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 1, 1, 100000);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.08;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(500, 1000, 800);
+scene.add(dirLight);
+
+scene.add(new THREE.AxesHelper(100));
+
+// Resize renderer when container changes size
+new ResizeObserver(() => {
+  const w = container.clientWidth, h = container.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}).observe(container);
+
+// Render loop
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+// ── Persistent scene objects ───────────────────────────────────────────────
+// Geometries are shared and never disposed between frames.
+const boxGeoNormal = new THREE.BoxGeometry(20, 20, 20);
+const boxGeoPerf   = new THREE.BoxGeometry(30, 30, 30);
+const perfMat      = new THREE.MeshLambertMaterial({ color: 0x44aa66 });
+const dummy        = new THREE.Object3D();
+const MAX_INST     = 48 * 32 * 4;   // 6144 — max peaks for largest grid
+
+// One group for normal modes (individual meshes)
+const cubeGroup = new THREE.Group();
+scene.add(cubeGroup);
+
+// One InstancedMesh for performance mode — pre-allocated, toggled visible
+const instMesh = new THREE.InstancedMesh(boxGeoPerf, perfMat, MAX_INST);
+instMesh.count   = 0;
+instMesh.visible = false;
+scene.add(instMesh);
+
+function clearCubes() {
+  // Dispose only per-frame materials; geometry is shared and kept alive
+  for (const child of cubeGroup.children) {
+    if (child.isMesh) child.material.dispose();
+  }
+  cubeGroup.clear();
+}
+
+// ── Colour helpers ─────────────────────────────────────────────────────────
+function colorFromConfidence(snr) {
+  const v = Math.min(snr / 255, 1);
+  return new THREE.Color(v, v, v);
+}
+
+function colorFromDistance(dist, maxZ) {
+  const t = Math.max(0, Math.min(dist / maxZ, 1));
+  return new THREE.Color().setHSL(t * 240 / 360, 0.9, 0.5);
+}
+
+// ── Camera positioning ─────────────────────────────────────────────────────
+// Sensor coordinates: Z = depth (positive away from sensor).
+// Three.js mapping: three.z = -sensor.z  →  objects sit in negative-Z half-space.
+// Centre of the cloud is near (0, 0, -maxZ/2).
+function positionCamera() {
+  const maxZ = parseInt(pMaxZ.value, 10) || 4000;
+  const cx = 0, cy = 0, cz = -maxZ / 2;       // orbit target = cloud centre
+  controls.target.set(cx, cy, cz);
+
+  if (pTilt.checked) {
+    // Angled view to show depth (Z axis visible)
+    camera.position.set(maxZ * 0.9, maxZ * 0.5, cz + maxZ * 0.9);
+  } else {
+    // Front-on view: looking straight along the sensor's optical axis
+    camera.position.set(0, 0, cz + maxZ * 1.3);
+  }
+  camera.lookAt(cx, cy, cz);
+  controls.update();
+}
+
+// ── Frame update ───────────────────────────────────────────────────────────
+function renderFrame(frame) {
+  const results = frame.results;
+  if (!results || results.length === 0) return;
+
+  const maxZ   = parseInt(pMaxZ.value, 10) || 4000;
+  const mode   = pDisplay.value;
+  const isPerfMode = (mode === 'perf');
+
+  clearCubes();
+  cubeGroup.visible = !isPerfMode;
+  instMesh.visible  =  isPerfMode;
+
+  let targetCount = 0;
+  let instIdx     = 0;
+
+  for (const row of results) {
+    for (const pixel of row) {
+      for (const peak of pixel.peaks) {
+        if (peak.distance === 0) continue;
+
+        // Coordinate mapping: sensor Y inverted (sensor Y down → Three.js Y up),
+        // sensor Z inverted (sensor Z away → Three.js Z toward camera).
+        const tx =  parseFloat(peak.x);
+        const ty = -parseFloat(peak.y);
+        const tz = -parseFloat(peak.z);
+
+        if (-tz > maxZ) continue;   // clip to max distance
+        targetCount++;
+
+        if (isPerfMode) {
+          dummy.position.set(tx, ty, tz);
+          dummy.updateMatrix();
+          instMesh.setMatrixAt(instIdx++, dummy.matrix);
+        } else {
+          let color;
+          if      (mode === 'confidence') color = colorFromConfidence(peak.snr);
+          else if (mode === 'colored')    color = colorFromDistance(peak.distance, maxZ);
+          else                            color = new THREE.Color(0x4488cc);
+
+          const mesh = new THREE.Mesh(boxGeoNormal, new THREE.MeshLambertMaterial({ color }));
+          mesh.position.set(tx, ty, tz);
+          cubeGroup.add(mesh);
+        }
+      }
+    }
+  }
+
+  if (isPerfMode) {
+    instMesh.count = instIdx;
+    instMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // Stats
+  const info = frame.info;
+  document.getElementById('s-frame').textContent   = info.frame_number;
+  document.getElementById('s-temp').textContent    = info.temperature + ' °C';
+  document.getElementById('s-warn').textContent    = '0x' + info.warnings.toString(16).padStart(2, '0').toUpperCase();
+  document.getElementById('s-targets').textContent = targetCount;
+
+  const now = performance.now();
+  frameTimestamps.push(now);
+  if (frameTimestamps.length > 10) frameTimestamps.shift();
+  if (frameTimestamps.length >= 2) {
+    const elapsed = (frameTimestamps.at(-1) - frameTimestamps[0]) / 1000;
+    document.getElementById('s-fps').textContent = ((frameTimestamps.length - 1) / elapsed).toFixed(1);
+  }
+
+  noData.style.display = 'none';
+}
+
+// ── Sensor config ──────────────────────────────────────────────────────────
+function buildConfigLine() {
+  return `mode=${pMode.value} period=${pPeriod.value} peaks=${pPeaks.value} ` +
+         `threshold=${pThreshold.value} signal=${pSignal.checked?1:0} ` +
+         `noise=${pNoise.checked?1:0} xtalk=${pXtalk.checked?1:0}`;
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function setStatus(state) { statusDot.className = state; }
+
+function connect() {
+  if (ws) { ws.close(); ws = null; }
+  clearTimeout(autoReconnectTimer);
+  const url = urlInput.value.trim();
+  setStatus('connecting');
+  btnConnect.textContent = 'Connecting…';
+  btnConnect.className = '';
+
+  try { ws = new WebSocket(url); }
+  catch (e) { setStatus('error'); btnConnect.textContent = 'Connect'; return; }
+
+  ws.onopen = () => {
+    setStatus('connected');
+    btnConnect.textContent = 'Disconnect';
+    btnConnect.className = 'disconnect';
+    ws.send(buildConfigLine());
+    positionCamera();
+  };
+
+  ws.onmessage = (e) => {
+    let frame;
+    try { frame = JSON.parse(e.data); } catch { return; }
+    if (!frame.results || !frame.info) return;
+    renderFrame(frame);
+  };
+
+  ws.onclose = () => {
+    setStatus('error');
+    btnConnect.textContent = 'Connect';
+    btnConnect.className = '';
+    ws = null;
+    autoReconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => { setStatus('error'); };
+}
+
+function disconnect() {
+  clearTimeout(autoReconnectTimer);
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  setStatus('');
+  btnConnect.textContent = 'Connect';
+  btnConnect.className = '';
+}
+
+btnConnect.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) disconnect();
+  else connect();
+});
+
+btnApply.addEventListener('click', () => { disconnect(); setTimeout(connect, 100); });
+
+// Display mode and max-Z changes take effect on the next frame — no reconnect needed
+pDisplay.addEventListener('change', () => { if (noData.style.display === 'none') clearCubes(); });
+pTilt.addEventListener('change', positionCamera);
+pMaxZ.addEventListener('change', positionCamera);
+
+positionCamera();
+</script>
+</body>
+</html>

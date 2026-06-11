@@ -7,6 +7,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - CMake build system,
 - no need for root/sudo (thanks to libgpiod)
 - possibilities to stream frames as json
+- sample html page showing streamed frames
 
 ## Features
 
@@ -16,6 +17,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - **JSON Logging**: Compressed JSON file output with metadata
 - **JSON Streaming**: One JSON object per frame written to stdout (newline-delimited) for real-time forwarding via `websocketd` or similar tools
 - **Live Distance Map Viewer**: Self-contained HTML page (`tools_stream/index.html`) displaying a colour-coded 2D distance grid over WebSocket
+- **3D Scatter Plot Viewer**: Self-contained HTML page (`tools_stream/scatter3d.html`) rendering all detected targets at their true X/Y/Z positions using Three.js
 - **Keystone Angle Calculation**: Calculate X, Y, Z angles from sensor data with optional denoising
 - **Flexible Configuration**: Extensive command-line parameters for customization
 
@@ -762,6 +764,29 @@ command directly from the editor. The task is configured in `.vscode/tasks.json`
 
 ![hand in view](pictures/Screenshot_hand.png)
 Hand in view of tmf8829
+
+#### 3D Scatter Plot Viewer
+
+The `tools_stream/scatter3d.html` file renders all detected targets at their true X/Y/Z
+positions (in mm from the sensor) as interactive 3D cubes. Uses
+[Three.js](https://threejs.org) loaded from CDN — no build step required.
+
+**Display modes** (selectable from the Parameters panel):
+- **Only Distance** — all cubes in a uniform blue; lowest GPU cost
+- **Show Confidence** — cube colour is a grey shade proportional to SNR (dark = low confidence, white = high)
+- **Colored Distance** — cube colour maps Z distance to hue: red = near, blue = far (same scale as the 2D map)
+- **GUI Performance Mode** — single `InstancedMesh`, one draw call regardless of target count; recommended for 32×32 or 48×32 with multiple peaks per zone
+
+**Controls:**
+- **Max Z (mm)** — clips targets beyond this depth and centres the camera on the visible cloud
+- **Tilt Axis** — unchecked: front-on view along the sensor's optical axis (matches the 2D map orientation); checked: angled isometric view showing depth; mouse drag orbits freely in both states
+- **Parameters panel** — same sensor controls as the 2D viewer (mode, period, peaks, etc.), sent to the driver on every connect
+
+**Quickstart** (same `websocketd` command as the 2D viewer):
+```bash
+websocketd --port 8080 --staticdir=tools_stream ./build/tmf8829 -m -t 0 --stream
+```
+Open `http://<device-ip>:8080/scatter3d.html`.
 
 ---
 
