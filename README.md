@@ -787,8 +787,7 @@ websocketd --port 8080 --staticdir=tools_stream ./build/tmf8829 -m -t 0 --stream
 ```
 Open `http://<device-ip>:8080/scatter3d.html`.
 
-<video src="pictures/hand.webm" autoplay loop muted playsinline width="100%"></video>
-Hand in view of TMF8829 shown in the 3D Scatter Plot Viewer.
+[![Hand in view of TMF8829 shown in the 3D Scatter Plot Viewer](pictures/hand_thumb.jpg)](https://raw.githubusercontent.com/phryniszak/tmf8829_driver_linux_userspace/main/pictures/hand.webm)
 
 ---
 
