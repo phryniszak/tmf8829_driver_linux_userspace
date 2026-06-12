@@ -93,10 +93,10 @@
         <option value="distance">Only Distance</option>
         <option value="confidence">Show Confidence</option>
         <option value="colored">Colored Distance</option>
-        <option value="perf">GUI Performance Mode</option>
       </select>
     </label>
     <label>Max Z (mm): <input id="p-maxz" type="number" value="4000" min="100" max="9999"></label>
+    <label>Cube size (mm): <input id="p-cubesize" type="number" value="10" min="1" max="500"></label>
     <label><input id="p-tilt" type="checkbox"> Tilt Axis</label>
     <button id="btn-apply">Apply</button>
   </div>
@@ -132,6 +132,7 @@ const pNoise     = document.getElementById('p-noise');
 const pXtalk     = document.getElementById('p-xtalk');
 const pDisplay   = document.getElementById('p-display');
 const pMaxZ      = document.getElementById('p-maxz');
+const pCubeSize  = document.getElementById('p-cubesize');
 const pTilt      = document.getElementById('p-tilt');
 const btnApply   = document.getElementById('btn-apply');
 const noData     = document.getElementById('no-data');
@@ -178,22 +179,11 @@ new ResizeObserver(() => {
 })();
 
 // ── Persistent scene objects ───────────────────────────────────────────────
-// Geometries are shared and never disposed between frames.
-const boxGeoNormal = new THREE.BoxGeometry(20, 20, 20);
-const boxGeoPerf   = new THREE.BoxGeometry(30, 30, 30);
-const perfMat      = new THREE.MeshLambertMaterial({ color: 0x44aa66 });
-const dummy        = new THREE.Object3D();
-const MAX_INST     = 48 * 32 * 4;   // 6144 — max peaks for largest grid
-
-// One group for normal modes (individual meshes)
+// Unit cube — scale applied per-frame so cube size is adjustable without
+// recreating geometry.
+const boxGeo    = new THREE.BoxGeometry(1, 1, 1);
 const cubeGroup = new THREE.Group();
 scene.add(cubeGroup);
-
-// One InstancedMesh for performance mode — pre-allocated, toggled visible
-const instMesh = new THREE.InstancedMesh(boxGeoPerf, perfMat, MAX_INST);
-instMesh.count   = 0;
-instMesh.visible = false;
-scene.add(instMesh);
 
 function clearCubes() {
   // Dispose only per-frame materials; geometry is shared and kept alive
@@ -239,16 +229,13 @@ function renderFrame(frame) {
   const results = frame.results;
   if (!results || results.length === 0) return;
 
-  const maxZ   = parseInt(pMaxZ.value, 10) || 4000;
-  const mode   = pDisplay.value;
-  const isPerfMode = (mode === 'perf');
+  const maxZ     = parseInt(pMaxZ.value, 10) || 4000;
+  const cubeSize = Math.max(1, parseInt(pCubeSize.value, 10) || 10);
+  const mode     = pDisplay.value;
 
   clearCubes();
-  cubeGroup.visible = !isPerfMode;
-  instMesh.visible  =  isPerfMode;
 
   let targetCount = 0;
-  let instIdx     = 0;
 
   for (const row of results) {
     for (const pixel of row) {
@@ -264,27 +251,17 @@ function renderFrame(frame) {
         if (-tz > maxZ) continue;   // clip to max distance
         targetCount++;
 
-        if (isPerfMode) {
-          dummy.position.set(tx, ty, tz);
-          dummy.updateMatrix();
-          instMesh.setMatrixAt(instIdx++, dummy.matrix);
-        } else {
-          let color;
-          if      (mode === 'confidence') color = colorFromConfidence(peak.snr);
-          else if (mode === 'colored')    color = colorFromDistance(peak.distance, maxZ);
-          else                            color = new THREE.Color(0x4488cc);
+        let color;
+        if      (mode === 'confidence') color = colorFromConfidence(peak.snr);
+        else if (mode === 'colored')    color = colorFromDistance(peak.distance, maxZ);
+        else                            color = new THREE.Color(0x4488cc);
 
-          const mesh = new THREE.Mesh(boxGeoNormal, new THREE.MeshLambertMaterial({ color }));
-          mesh.position.set(tx, ty, tz);
-          cubeGroup.add(mesh);
-        }
+        const mesh = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color }));
+        mesh.position.set(tx, ty, tz);
+        mesh.scale.setScalar(cubeSize);
+        cubeGroup.add(mesh);
       }
     }
-  }
-
-  if (isPerfMode) {
-    instMesh.count = instIdx;
-    instMesh.instanceMatrix.needsUpdate = true;
   }
 
   // Stats

@@ -16,7 +16,7 @@ The TMF8829 MCU Project provides a comprehensive driver and application for the 
 - **Histogram Data Capture**: Optional histogram data for detailed analysis
 - **JSON Logging**: Compressed JSON file output with metadata
 - **JSON Streaming**: One JSON object per frame written to stdout (newline-delimited) for real-time forwarding via `websocketd` or similar tools
-- **Live Distance Map Viewer**: Self-contained HTML page (`tools_stream/index.html`) displaying a colour-coded 2D distance grid over WebSocket
+- **Live Distance Map Viewer**: Self-contained HTML page (`tools_stream/depth2dmap.html`) displaying a colour-coded 2D distance grid over WebSocket
 - **3D Scatter Plot Viewer**: Self-contained HTML page (`tools_stream/scatter3d.html`) rendering all detected targets at their true X/Y/Z positions using Three.js
 - **Keystone Angle Calculation**: Calculate X, Y, Z angles from sensor data with optional denoising
 - **Flexible Configuration**: Extensive command-line parameters for customization
@@ -726,7 +726,7 @@ sensor frame (~11 FPS in 8x8 mode).
 
 #### Live Distance Map Viewer
 
-The `tools_stream/index.html` file is a self-contained browser-based viewer that
+The `tools_stream/depth2dmap.html` file is a self-contained browser-based viewer that
 connects to the `websocketd` WebSocket and renders each frame as a colour-coded 2D grid
 in real time. No build step or external dependencies are required.
 
@@ -775,7 +775,6 @@ positions (in mm from the sensor) as interactive 3D cubes. Uses
 - **Only Distance** — all cubes in a uniform blue; lowest GPU cost
 - **Show Confidence** — cube colour is a grey shade proportional to SNR (dark = low confidence, white = high)
 - **Colored Distance** — cube colour maps Z distance to hue: red = near, blue = far (same scale as the 2D map)
-- **GUI Performance Mode** — single `InstancedMesh`, one draw call regardless of target count; recommended for 32×32 or 48×32 with multiple peaks per zone
 
 **Controls:**
 - **Max Z (mm)** — clips targets beyond this depth and centres the camera on the visible cloud
@@ -787,6 +786,9 @@ positions (in mm from the sensor) as interactive 3D cubes. Uses
 websocketd --port 8080 --staticdir=tools_stream ./build/tmf8829 -m -t 0 --stream
 ```
 Open `http://<device-ip>:8080/scatter3d.html`.
+
+<video src="pictures/hand.webm" autoplay loop muted playsinline width="100%"></video>
+Hand in view of TMF8829 shown in the 3D Scatter Plot Viewer.
 
 ---
 
