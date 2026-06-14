@@ -44,6 +44,10 @@
 #include "tmf8829_keystone.h"
 #endif
 
+#ifdef ENABLE_HANDPOSE
+#include "handpose.h"
+#endif
+
 #define BUS_I2C               1
 #define BUS_SPI               2
 
@@ -67,6 +71,10 @@ typedef struct _tmf8829_chip
     int gpiod_enable;                    /**< GPIO enable pin number */
     uint8_t bustype;                     /**< bus type: BUS_I2C or BUS_SPI */
     uint8_t stream_enabled;              /**< emit newline-delimited JSON frames to stdout */
+#ifdef ENABLE_HANDPOSE
+    handpose_t handpose;                 /**< hand-pose CNN context (model + cfg) */
+    uint8_t handpose_enabled;            /**< hand-pose inference enabled flag */
+#endif
 } tmf8829_chip;
 
 /* Configuration functions */

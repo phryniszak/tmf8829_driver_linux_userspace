@@ -24,6 +24,9 @@
 #ifdef ENABLE_KEYSTONE
 #include "tmf8829_keystone.h"
 #endif
+#ifdef ENABLE_HANDPOSE
+#include "tmf8829_handpose.h"
+#endif
 
 /* Parser states */
 #define PARSER_STATE_IDLE           0
@@ -1082,6 +1085,13 @@ void handleReceivedResultDataEnd(void *dptr)
                          &parser->keystoneAngleX,
                          &parser->keystoneAngleY,
                          &parser->keystoneAngleZ);
+    }
+#endif
+
+#ifdef ENABLE_HANDPOSE
+    /* Hand-pose inference on the completed result frame (opt-in, additive). */
+    if (chip->handpose_enabled && parser->resultReady) {
+        tmf8829_handpose_on_frame(chip);
     }
 #endif
 

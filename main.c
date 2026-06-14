@@ -29,6 +29,9 @@
 #ifdef ENABLE_KEYSTONE
 #include "tmf8829_keystone.h"
 #endif
+#ifdef ENABLE_HANDPOSE
+#include "handpose.h"
+#endif
 
 /* GPIO pin number used to drive the chip's enable line, set via the
  * GPIO_ENABLE_PIN CMake cache variable (defaults to 16). */
@@ -89,6 +92,14 @@ static void usage(const char *program)
 #endif
     printf("    -S, --stream              : stream JSON frames to stdout (for websocketd)\n");
     printf("    -u, --debug               : enable debug print output (default: disabled)\n");
+#ifdef ENABLE_HANDPOSE
+    printf("    -P, --handpose            : enable hand-pose inference (use with -d 11 = 48x32)\n");
+    printf("        --handpose-model <f>  : weights file (default: model/hand_pose.weights)\n");
+    printf("        --handpose-meta <f>   : joint meta file (default: model/meta.txt)\n");
+    printf("        --handpose-record <d> : dump depth frames (float32[1536]) to dir d\n");
+    printf("        --handpose-flipx/flipy/transpose : pixel-layout calibration\n");
+    printf("        --handpose-snrmin <n> : reject peaks with SNR below n (default 0)\n");
+#endif
     printf("\n\n");
 }
 
@@ -125,6 +136,13 @@ int main (int argc, char * argv[])
 #endif
     int enable_stream = 0;  /* default 0: disabled */
     int num_peaks = 1;      /* default 1 */
+#ifdef ENABLE_HANDPOSE
+    int enable_handpose = 0;
+    const char *handpose_model  = "model/hand_pose.weights";
+    const char *handpose_meta   = "model/meta.txt";
+    const char *handpose_record = "";
+    int hp_flipx = 0, hp_flipy = 0, hp_transpose = 0, hp_snrmin = 0;
+#endif
     time_t start_time;
     tmf8829_cfg_t tof_cfg;
     tmf8829_chip *tof_chip = &g_tof_chip;
@@ -157,10 +175,26 @@ int main (int argc, char * argv[])
 #endif
         {"stream",          no_argument,       0, 'S'},
         {"debug",           no_argument,       0, 'u'},
+#ifdef ENABLE_HANDPOSE
+        {"handpose",            no_argument,       0, 'P'},
+        {"handpose-model",      required_argument, 0, 1001},
+        {"handpose-meta",       required_argument, 0, 1002},
+        {"handpose-record",     required_argument, 0, 1003},
+        {"handpose-flipx",      no_argument,       0, 1004},
+        {"handpose-flipy",      no_argument,       0, 1005},
+        {"handpose-transpose",  no_argument,       0, 1006},
+        {"handpose-snrmin",     required_argument, 0, 1007},
+#endif
         {0, 0, 0, 0}
     };
 
-    while ((c = getopt_long(argc, argv, "mb:d:t:i:s:r:p:hgnxo:jkSu", long_options, NULL)) != -1) {
+#ifdef ENABLE_HANDPOSE
+#define HP_EXTRA_OPTS "P"
+#else
+#define HP_EXTRA_OPTS ""
+#endif
+
+    while ((c = getopt_long(argc, argv, "mb:d:t:i:s:r:p:hgnxo:jkSu" HP_EXTRA_OPTS, long_options, NULL)) != -1) {
         switch (c) {
             case 'm':
                 is_measurement = 1;
@@ -280,6 +314,16 @@ int main (int argc, char * argv[])
                 PRINT_INFO("Debug output enabled\n");
                 break;
             }
+#ifdef ENABLE_HANDPOSE
+            case 'P':  enable_handpose = 1; PRINT_INFO("Hand-pose inference enabled\n"); break;
+            case 1001: handpose_model  = optarg; break;
+            case 1002: handpose_meta   = optarg; break;
+            case 1003: handpose_record = optarg; break;
+            case 1004: hp_flipx = 1; break;
+            case 1005: hp_flipy = 1; break;
+            case 1006: hp_transpose = 1; break;
+            case 1007: { int v = 0; if (optarg) sscanf(optarg, "%d", &v); hp_snrmin = v; break; }
+#endif
             default:
                 PRINT_INFO("Error parsing cmdline args.\n");
                 usage(argv[0]);
@@ -357,10 +401,33 @@ int main (int argc, char * argv[])
     tof_chip->keystoneEnabled = enable_keystone;
 #endif
     tof_chip->stream_enabled = enable_stream;
+#ifdef ENABLE_HANDPOSE
+    tof_chip->handpose_enabled = enable_handpose;
+#endif
 
     tmf8829_set_busType(tof_chip, bus_type);
     if (tmf8829_probe(tof_chip) == -1)
         return 0;
+
+#ifdef ENABLE_HANDPOSE
+    if (tof_chip->handpose_enabled) {
+        if (handpose_init(&tof_chip->handpose, handpose_model, handpose_meta) != 0) {
+            PRINT_INFO("Hand-pose: failed to load model — feature disabled\n");
+            tof_chip->handpose_enabled = 0;
+        } else {
+            tof_chip->handpose.flip_x    = hp_flipx;
+            tof_chip->handpose.flip_y    = hp_flipy;
+            tof_chip->handpose.transpose = hp_transpose;
+            tof_chip->handpose.snr_min   = hp_snrmin;
+            if (handpose_record[0]) {
+                strncpy(tof_chip->handpose.record_dir, handpose_record,
+                        sizeof(tof_chip->handpose.record_dir) - 1);
+            }
+            PRINT_INFO("Hand-pose: loaded %d joints (flips x=%d y=%d t=%d, snrMin=%d)\n",
+                       tof_chip->handpose.n_joints, hp_flipx, hp_flipy, hp_transpose, hp_snrmin);
+        }
+    }
+#endif
 
     if (tmf8829ConfigMode(tof_chip, preConfiguration) != 0)
         return 0;
@@ -399,6 +466,11 @@ int main (int argc, char * argv[])
         /* Cleanup on exit */
         tmf8829_cleanup(tof_chip);
     }
+
+#ifdef ENABLE_HANDPOSE
+    if (tof_chip->handpose.loaded)
+        handpose_free(&tof_chip->handpose);
+#endif
 
     return 0;
 }

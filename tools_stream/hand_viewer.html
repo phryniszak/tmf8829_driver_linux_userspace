@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<!--
+  hand_viewer.html — live hand-pose viewer for the TMF8829 hand-pose feature.
+
+  Consumes the tagged JSON lines emitted by `tmf8829 --handpose`:
+      HP {"frame":N,"joints_deg":[...],"names":[...]}
+  served over a WebSocket by websocketd, e.g.:
+
+      websocketd --port=8080 --staticdir=tools_stream \
+          ./build/tmf8829 -m -b 1 -d 11 --handpose -t 0
+
+  then open  http://<pi-ip>:8080/hand_viewer.html
+
+  NOTE: this is a SIMPLIFIED-kinematics hand (per-finger segment chain with
+  in-plane flexion + abduction spread), an approximate visualiser — not exact
+  anatomical/MuJoCo forward kinematics.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TMF8829 Hand Pose</title>
+<style>
+  body { margin:0; font-family:system-ui,sans-serif; background:#111; color:#ddd; }
+  #bar { padding:8px 12px; background:#1c1c1c; display:flex; gap:8px; align-items:center; }
+  #bar input { background:#222; color:#ddd; border:1px solid #444; padding:4px 6px; width:220px; }
+  #bar button { background:#2a6; color:#000; border:0; padding:5px 12px; cursor:pointer; border-radius:3px; }
+  #bar button.disconnect { background:#a33; color:#fff; }
+  #dot { width:10px; height:10px; border-radius:50%; background:#666; display:inline-block; }
+  #dot.connected { background:#2c2; } #dot.connecting { background:#cc2; } #dot.error { background:#c33; }
+  #info { margin-left:auto; font-size:13px; color:#999; }
+  canvas { display:block; margin:0 auto; background:#0a0a0a; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span id="dot"></span>
+  <input id="url" />
+  <button id="btn">Connect</button>
+  <span id="info">waiting…</span>
+</div>
+<canvas id="cv" width="560" height="620"></canvas>
+
+<script>
+const $ = id => document.getElementById(id);
+$('url').value = 'ws://' + (window.location.host || 'localhost:8080') + '/';
+const cv = $('cv'), ctx = cv.getContext('2d');
+let ws = null, reconnectTimer = null;
+
+// Finger layout (back-of-hand top-down). x in palm-width units, base y at knuckle.
+// Each finger curls "up" the canvas; flexion bends each joint, abduction tilts base.
+const FINGERS = [
+  // name-prefix, baseX, segLens[prox,mid,dist], abductionJoint, flexJoints[mcp,pip,dip]
+  { key:'2', x:-1.5, seg:[58,38,26], abd:'2mcp_abduction', flex:['2mcp_flexion','2pm_flexion','2md_flexion'] },
+  { key:'3', x:-0.5, seg:[64,42,28], abd:'3mcp_abduction', flex:['3mcp_flexion','3pm_flexion','3md_flexion'] },
+  { key:'4', x: 0.5, seg:[58,40,27], abd:'4mcp_abduction', flex:['4mcp_flexion','4pm_flexion','4md_flexion'] },
+  { key:'5', x: 1.5, seg:[44,30,22], abd:'5mcp_abduction', flex:['5mcp_flexion','5pm_flexion','5md_flexion'] },
+];
+
+let pose = {};   // name -> radians
+let frameNo = -1;
+
+function val(n){ return pose[n] || 0; }
+
+function draw() {
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const cx = cv.width/2, palmY = 430, unit = 46, palmW = 150, palmH = 120;
+
+  // palm
+  ctx.fillStyle = '#243'; ctx.strokeStyle = '#5a7'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(cx-palmW/2, palmY, palmW, palmH, 16); ctx.fill(); ctx.stroke();
+
+  // fingers (knuckles along top edge of palm)
+  for (const f of FINGERS) {
+    let x = cx + f.x*unit, y = palmY;
+    // base direction: straight up (-90deg) + abduction spread
+    let ang = -Math.PI/2 + val(f.abd) * 1.6;   // amplify spread for visibility
+    drawChain(x, y, ang, f.seg, f.flex);
+  }
+  // thumb: from lower-left of palm
+  {
+    let x = cx - palmW/2, y = palmY + palmH*0.55;
+    let ang = -Math.PI*0.95 + val('cmc_abduction')*1.4;  // points left-ish
+    drawChain(x, y, ang, [54,34,26],
+              ['cmc_flexion','mp_flexion','ip_flexion'], true);
+  }
+
+  ctx.fillStyle = '#888'; ctx.font = '12px monospace';
+  ctx.fillText('frame ' + frameNo, 10, cv.height-10);
+  ctx.fillText('green=joint  approx. visualiser', cv.width-220, cv.height-10);
+}
+
+function drawChain(x, y, ang, seg, flexNames, isThumb) {
+  ctx.lineCap = 'round';
+  for (let i=0; i<seg.length; i++){
+    // bend by this joint's flexion (curls toward palm = +angle)
+    ang += val(flexNames[i]);
+    const nx = x + Math.cos(ang)*seg[i];
+    const ny = y + Math.sin(ang)*seg[i];
+    ctx.strokeStyle = isThumb ? '#e94' : '#6cf';
+    ctx.lineWidth = 14 - i*3;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(nx,ny); ctx.stroke();
+    // joint dot
+    ctx.fillStyle = '#2c2'; ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fill();
+    x = nx; y = ny;
+  }
+  ctx.fillStyle = '#2c2'; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill(); // tip
+}
+
+function onLine(line){
+  line = line.trim();
+  if (!line.startsWith('HP ')) return;          // ignore non-handpose lines
+  let msg; try { msg = JSON.parse(line.slice(3)); } catch { return; }
+  if (!msg.names || !msg.joints_deg) return;
+  pose = {};
+  for (let i=0;i<msg.names.length;i++) pose[msg.names[i]] = msg.joints_deg[i] * Math.PI/180;
+  frameNo = msg.frame;
+  $('info').textContent = 'frame ' + frameNo + '  ·  ' + msg.names.length + ' joints';
+  draw();
+}
+
+function setDot(s){ $('dot').className = s; }
+function connect(){
+  if (ws) ws.close();
+  clearTimeout(reconnectTimer);
+  setDot('connecting'); $('btn').textContent='Connecting…';
+  try { ws = new WebSocket($('url').value.trim()); } catch(e){ setDot('error'); return; }
+  ws.onopen = () => { setDot('connected'); $('btn').textContent='Disconnect'; $('btn').className='disconnect'; };
+  ws.onmessage = e => onLine(e.data);
+  ws.onclose = () => { setDot('error'); $('btn').textContent='Connect'; $('btn').className=''; ws=null;
+                       reconnectTimer = setTimeout(connect, 3000); };
+  ws.onerror = () => setDot('error');
+}
+function disconnect(){ clearTimeout(reconnectTimer); if(ws){ ws.onclose=null; ws.close(); ws=null; }
+                       setDot(''); $('btn').textContent='Connect'; $('btn').className=''; }
+$('btn').addEventListener('click', () => {
+  if (ws && ws.readyState===WebSocket.OPEN) disconnect(); else connect();
+});
+draw();
+</script>
+</body>
+</html>

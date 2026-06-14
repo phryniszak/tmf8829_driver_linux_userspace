@@ -1,0 +1,24 @@
+n_joints 22
+depth_w 48 depth_h 32
+cmc_flexion -0.785398 0.261799
+cmc_abduction -0.436332 0.436332
+mp_flexion -0.698132 0.785398
+ip_flexion -0.436332 1.309
+2mcp_abduction -0.261799 0.261799
+2mcp_flexion -0.785398 1.5708
+2pm_flexion 0 1.74533
+2md_flexion 0 1.39626
+3mcp_abduction -0.261799 0.261799
+3mcp_flexion -0.785398 1.5708
+3pm_flexion 0 1.74533
+3md_flexion 0 1.39626
+4cmc_flexion 0 0.2032
+4mcp_abduction -0.261799 0.261799
+4mcp_flexion -0.785398 1.5708
+4pm_flexion 0 1.74533
+4md_flexion 0 1.39626
+CMC5_r1 -1 1
+5mcp_abduction -0.261799 0.261799
+5mcp_flexion -0.785398 1.5708
+5pm_flexion 0 1.74533
+5md_flexion 0 1.39626
